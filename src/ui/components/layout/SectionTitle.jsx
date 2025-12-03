@@ -15,12 +15,12 @@ const SectionTitle = ({
 }) => {
   return (
     <div className="section-title">
-      {Icon && <Icon size={16} />}
+      {Icon && <Icon size={14} />}
       <div className="section-title-container">
         {label}
         {warning && (
-          <span className="risky-label" style={{ marginLeft: '0.5rem' }}>
-            RISKY!!!
+          <span className="risky-label">
+            RISKY
           </span>
         )}
       </div>
@@ -34,10 +34,10 @@ const SectionTitle = ({
       )}
       <Checkbox
         id={`${label.toLowerCase().replace(/\s+/g, '-')}-enable`}
-        label="Enabled"
+        label=""
         checked={enabled}
         onChange={onEnabledChange}
-        style={{ border: 'none', background: 'none', padding: '4px 6px', margin: 0 }}
+        style={{ border: 'none', background: 'none', padding: '0', margin: 0 }}
       />
     </div>
   );

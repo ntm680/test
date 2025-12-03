@@ -14,21 +14,21 @@ const Titlebar = ({ onMouseDown, version }) => {
       const versionNumber = updateMatch[1];
       return (
         <>
-          {versionNumber}
-          <span className="update-available-text"> update available!</span>
+          v{versionNumber}
+          <span className="update-available-text"> UPDATE!</span>
         </>
       );
     }
 
-    return version;
+    return 'v' + version;
   };
 
   return (
     <div className="titlebar" onMouseDown={handleMouseDown}>
       <Icons.Surplus_ className="menu-icon" />
-      {version && <div className="version-text">{renderVersion()}</div>}
-      <div className="title">survevhack</div>
+      <div className="title">SurvevHack</div>
       <div className="credit">by pirated.exe</div>
+      {version && <div className="version-text">{renderVersion()}</div>}
     </div>
   );
 };

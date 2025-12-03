@@ -1,3 +1,4 @@
+import { isHandledByWeaponSwitch } from '@/features/WeaponSwitch.js';
 import { gameManager, settings, inputState } from '@/core/state.js';
 import { gameObjects, inputCommands, isGameReady } from '@/utils/constants.js';
 import { translations } from '@/core/obfuscatedNameTranslator.js';
@@ -12,7 +13,6 @@ const weaponState = [
 ];
 
 const queueInput = (command) => {
-  // Vérifie que l'auto-switch est activé
   if (!settings.autoSwitch_?.enabled_) return;
   inputState.queuedInputs_.push(command);
 };
@@ -64,6 +64,13 @@ const handleWeaponSwitch = () => {
 
     const otherWeaponIndex = getAlternateWeaponIndex(currentWeaponIndex);
     const otherWeapon = weapons[otherWeaponIndex];
+
+    // Si WeaponSwitch gère cette arme, on ne fait rien ici
+    if (isHandledByWeaponSwitch(currentWeapon.type)) {
+      currentWeaponState.ammo_ = currentWeapon.ammo;
+      currentWeaponState.type_ = currentWeapon.type;
+      return;
+    }
 
     const shouldSwitch =
       isSlowFiringWeapon(currentWeapon.type) &&

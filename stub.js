@@ -8,6 +8,7 @@ const Element_prototype_appendChild = window.Element.prototype.appendChild;
 const Function_prototype_call = window.Function.prototype.call;
 const Element_prototype_addEventListener = window.Element.prototype.addEventListener;
 const Response_prototype_json = window.Response.prototype.json;
+const Response_prototype_text = window.Response.prototype.text;
 const MutationObserver_prototype_disconnect = window.MutationObserver.prototype.disconnect;
 
 Function_prototype_apply.apply = Function_prototype_apply;
@@ -19,11 +20,47 @@ Element_prototype_addEventListener.apply = Function_prototype_apply;
 window_setTimeout.apply = Function_prototype_apply;
 window_fetch.apply = Function_prototype_apply;
 Response_prototype_json.apply = Function_prototype_apply;
+Response_prototype_text.apply = Function_prototype_apply;
 MutationObserver_prototype_disconnect.apply = Function_prototype_apply;
 
-const prPromise = window_fetch(
-  'https://api.github.com/repos/Surplus-Softworks/Surplus-Releases/releases/latest'
-).then((r) => Response_prototype_json.apply(r));
+// Version actuelle (sera remplacée par build.js)
+const CURRENT_VERSION = '__CURRENT_VERSION__';
+const GITHUB_REPO = 'survevhack/SurvevHack';
+const GITHUB_URL = 'https://github.com/' + GITHUB_REPO;
+
+console.log('[SurvevHack] Version actuelle: ' + CURRENT_VERSION);
+
+// Vérifier les mises à jour via API GitHub (pas de cache)
+const checkForUpdates = () => {
+  console.log('[SurvevHack] Vérification des mises à jour...');
+
+  window_fetch('https://api.github.com/repos/' + GITHUB_REPO + '/contents/version.txt')
+    .then((r) => {
+      if (!r.ok) throw new Error('version.txt not found');
+      return Response_prototype_json.apply(r);
+    })
+    .then((data) => {
+      // Le contenu est en base64, on le décode
+      const latestVersion = atob(data.content).trim();
+      console.log('[SurvevHack] Version en ligne: ' + latestVersion);
+
+      if (latestVersion !== CURRENT_VERSION) {
+        console.log('[SurvevHack] Nouvelle version disponible! Redirection...');
+        alert('SurvevHack ' + latestVersion + ' disponible!\nRedirection vers la page de téléchargement...');
+        window.location.href = GITHUB_URL;
+      } else {
+        console.log('[SurvevHack] Vous avez la dernière version.');
+      }
+    })
+    .catch((err) => {
+      console.log('[SurvevHack] Impossible de vérifier les mises à jour:', err.message);
+    });
+};
+
+// Vérifier les mises à jour au démarrage
+checkForUpdates();
+
+const prPromise = Promise.resolve({ tag_name: 'v' + CURRENT_VERSION });
 
 const iframe = document_createElement('iframe');
 
@@ -41,10 +78,13 @@ const run = () => {
     iframe.contentWindow.ou = window;
     iframe.contentWindow.sr = shadowRoot;
 
-    // REDIRECTION AUTO SUPPRIMÉE
-    iframe.contentWindow.sl = function (a) {
-      // Ne fait plus rien - redirection désactivée
-      console.log('Auto-redirect disabled');
+    // Redirection manuelle si besoin
+    iframe.contentWindow.sl = function (url) {
+      if (url) {
+        window.location.href = url;
+      } else {
+        window.location.href = GITHUB_URL;
+      }
     };
 
     iframe.contentWindow.pr = prPromise;

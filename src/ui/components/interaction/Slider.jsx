@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useCallback } from 'react';
 
 const Slider = ({ id, label, value, min = 0, max = 100, warning = false, onChange }) => {
   const [isDragging, setIsDragging] = useState(false);
@@ -6,7 +6,7 @@ const Slider = ({ id, label, value, min = 0, max = 100, warning = false, onChang
   const sliderValue = ((value - min) / (max - min)) * 100;
 
   const sliderStyle = {
-    background: `linear-gradient(to right, #6edb72 0%, #58c05c ${sliderValue}%, #333 ${sliderValue}%, #333 100%)`,
+    background: `linear-gradient(to right, #00d4ff 0%, #00a8cc ${sliderValue}%, #1a1a25 ${sliderValue}%, #1a1a25 100%)`,
   };
 
   const handleChange = (e) => {
@@ -62,14 +62,27 @@ const Slider = ({ id, label, value, min = 0, max = 100, warning = false, onChang
       <label
         htmlFor={id}
         style={{
-          color: '#ddd',
-          fontSize: '0.8125rem',
+          color: '#8888aa',
+          fontSize: '0.75rem',
           cursor: 'default',
           pointerEvents: 'none',
+          flex: 1,
         }}
       >
         {label}
       </label>
+      <span
+        style={{
+          color: '#00d4ff',
+          fontSize: '0.7rem',
+          fontWeight: '600',
+          minWidth: '2rem',
+          textAlign: 'right',
+          marginRight: '0.5rem',
+        }}
+      >
+        {value}
+      </span>
       <input
         ref={sliderRef}
         type="range"
@@ -91,7 +104,7 @@ const Slider = ({ id, label, value, min = 0, max = 100, warning = false, onChang
       />
       {warning && (
         <span className="risky-label" style={{ marginLeft: '0.5rem' }}>
-          RISKY!!!
+          RISKY
         </span>
       )}
     </div>

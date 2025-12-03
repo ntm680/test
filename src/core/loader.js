@@ -1,3 +1,9 @@
+console.log('🟢 LOADER.JS FILE LOADED');
+
+import healthDisplay from '@/features/HealthDisplay.js';
+import adBlocker from '@/features/AdBlocker.js';
+import weaponSwitch from '@/features/WeaponSwitch.js';
+import statsOverlay from '@/features/StatsOverlay.js';
 import xray from '@/features/X-Ray.js';
 import infiniteZoom from '@/features/InfiniteZoom.js';
 import esp from '@/features/ESP.js';
@@ -15,6 +21,9 @@ import { initializeAimController, isAimInterpolating, getAimMode } from '@/core/
 import initUI from '@/ui/init.jsx';
 import { outer } from '@/core/outer.js';
 
+console.log('🟢 ALL IMPORTS OK');
+console.log('🟢 mapHighlights:', typeof mapHighlights, mapHighlights);
+
 function injectGame(oninject) {
   hook(outer.Function.prototype, 'call', {
     apply(f, th, args) {
@@ -31,9 +40,12 @@ function injectGame(oninject) {
 }
 
 const loadStaticPlugins = () => {
+  healthDisplay();
   infiniteZoom();
   autoFire();
   mapHighlights();
+  weaponSwitch();
+  adBlocker();
 };
 
 const loadPIXI = () => {
@@ -260,6 +272,8 @@ const attach = () => {
 };
 
 export const initialize = () => {
+  console.log('🟢 initialize() CALLED');
+
   try {
     const configKey = 'surviv_config';
     const configStr = outer.localStorage.getItem(configKey);
@@ -272,19 +286,8 @@ export const initialize = () => {
   } catch { }
 
   initUI();
+  console.log('🟢 initUI done, calling loadStaticPlugins');
   loadStaticPlugins();
+  console.log('🟢 loadStaticPlugins done');
   injectGame(attach);
-
-  // DÉSACTIVÉ - Double input causait des changements d'armes multiples
-  /*
-  (() => {
-    requestAnimationFrame(doubleInputs);
-    function doubleInputs() {
-      requestAnimationFrame(doubleInputs);
-      try {
-        gameManager.game?.[translations.sendMessage_]?.(packetTypes.Input_, gameManager.game?.[translations.prevInputMsg_]);
-      } catch { }
-    }
-  })();
-  */
 };

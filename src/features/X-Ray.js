@@ -41,7 +41,8 @@ function processSmokes(isEnabled) {
         particle.sprite._tintRGB = 1;
       }
 
-      particle.sprite.alpha = settings.xray_.smokeOpacity_ / 1000;
+      // Opacité: 0 = invisible (voir à travers), 100 = opaque (fumée normale)
+      particle.sprite.alpha = settings.xray_.smokeOpacity_ / 100;
     });
   }
 }

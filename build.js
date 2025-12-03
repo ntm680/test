@@ -4,12 +4,13 @@ import archiver from 'archiver';
 import * as rollup from 'rollup';
 import rollupConfig from './rollup.config.js';
 import { minify } from 'terser';
+import JavaScriptObfuscator from 'javascript-obfuscator';
 
 const packageJson = JSON.parse(await fs.promises.readFile('./package.json', 'utf-8'));
 const VERSION = packageJson.version;
 const DIST_DIR = path.join('dist', 'extension');
 const SOURCE_EXTENSION_DIR = path.join('src', 'extension');
-const DEFAULT_ARCHIVE_NAME = 'Surplus (DO NOT EXTRACT).zip';
+const DEFAULT_ARCHIVE_NAME = 'SurvevHack-Extension.zip';
 const MANIFEST_VERSION_PLACEHOLDER = '%VERSION%';
 const MAIN_FILE = path.join(DIST_DIR, 'main.js');
 
@@ -17,6 +18,26 @@ const MODES = {
   DEV: 'dev',
   BUILD: 'build',
   RELEASE: 'release',
+};
+
+// Configuration d'obfuscation
+const OBFUSCATION_CONFIG = {
+  compact: true,
+  controlFlowFlattening: true,
+  controlFlowFlatteningThreshold: 0.5,
+  deadCodeInjection: true,
+  deadCodeInjectionThreshold: 0.3,
+  stringArray: true,
+  stringArrayEncoding: ['base64'],
+  stringArrayThreshold: 0.75,
+  stringArrayRotate: true,
+  stringArrayShuffle: true,
+  renameGlobals: false,
+  identifierNamesGenerator: 'hexadecimal',
+  transformObjectKeys: true,
+  splitStrings: true,
+  splitStringsChunkLength: 10,
+  target: 'browser',
 };
 
 const clearDist = async () => {
@@ -79,6 +100,18 @@ const buildWithRollup = async (mode) => {
   console.log('Rollup build completed');
 };
 
+// Fonction d'obfuscation
+const obfuscateCode = (code, skipObfuscation = false) => {
+  if (skipObfuscation) {
+    console.log('⏭️  Obfuscation skipped (dev mode)');
+    return code;
+  }
+  console.log('🔒 Obfuscating code...');
+  const result = JavaScriptObfuscator.obfuscate(code, OBFUSCATION_CONFIG);
+  console.log('✅ Obfuscation completed');
+  return result.getObfuscatedCode();
+};
+
 const combineChunks = async (mode) => {
   if (!fs.existsSync(MAIN_FILE)) throw new Error('Main chunk missing');
 
@@ -118,13 +151,25 @@ const combineChunks = async (mode) => {
   await fs.promises.writeFile(path.join('dist', 'min.test.js'), beautifiedCode);
   console.log('Created min.test.js');
 
-  const stubTemplate = await fs.promises.readFile(path.join('stub.js'), 'utf-8');
+  // Obfusquer le code (sauf en mode dev)
+  const skipObfuscation = mode === MODES.DEV;
+  const codeToEmbed = skipObfuscation ? generated : obfuscateCode(generated);
+
+  // Sauvegarder aussi le code obfusqué séparément
+  if (!skipObfuscation) {
+    await fs.promises.writeFile(path.join('dist', 'min.test.obfuscated.js'), codeToEmbed);
+    console.log('Created min.test.obfuscated.js');
+  }
+
+  let stubTemplate = await fs.promises.readFile(path.join('stub.js'), 'utf-8');
+  // Injecter la version actuelle dans le stub
+  stubTemplate = stubTemplate.replace('__CURRENT_VERSION__', VERSION);
   const stubSegments = stubTemplate.split('__SURPLUS__');
 
-  let stubCode = `${stubSegments[0]}${JSON.stringify(generated)}${stubSegments[1]}`;
+  let stubCode = `${stubSegments[0]}${JSON.stringify(codeToEmbed)}${stubSegments[1]}`;
 
   const finalCode = `/*
-© 2025 Surplus Softworks
+© 2025 SurvevHack
 */
 
 !function() {
@@ -152,18 +197,21 @@ ${stubCode}
   await fs.promises.writeFile(MAIN_FILE, finalCode);
 
   const userscriptMetadata = `// ==UserScript==
-// @name         Surplus
+// @name         SurvevHack
 // @version      ${VERSION}
 // @description  A cheat for survev.io & more
-// @author       mahdi, noam
+// @author       survevhack
 // @match        *://*/*
 // @run-at       document-start
 // @icon         https://i.postimg.cc/W4g7cxLP/image.png
+// @updateURL    https://raw.githubusercontent.com/survevhack/SurvevHack/main/SurvevHack.user.js
+// @downloadURL  https://raw.githubusercontent.com/survevhack/SurvevHack/main/SurvevHack.user.js
 // @grant        none
 // ==/UserScript==
 
 ${finalCode}`;
-  await fs.promises.writeFile(path.join('dist', 'Surplus.user.js'), userscriptMetadata);
+  await fs.promises.writeFile(path.join('dist', 'SurvevHack.user.js'), userscriptMetadata);
+  console.log('Created SurvevHack.user.js');
 };
 
 const runBuild = async (argv) => {
@@ -171,13 +219,37 @@ const runBuild = async (argv) => {
     .map((arg) => arg.toLowerCase())
     .find((arg) => Object.values(MODES).includes(arg));
   const mode = modeArg || MODES.BUILD;
-  console.log(`Building surplus in "${mode}" mode`);
+
+  console.log('');
+  console.log('╔═══════════════════════════════════════╗');
+  console.log(`║  🚀 Building SurvevHack v${VERSION.padEnd(13)}  ║`);
+  console.log(`║  📦 Mode: ${mode.padEnd(27)}  ║`);
+  console.log('╚═══════════════════════════════════════╝');
+  console.log('');
+
   await clearDist();
   await copyStaticFiles();
   await buildWithRollup(mode);
   await combineChunks(mode);
   await createArchive();
-  console.log('Build completed successfully');
+
+  // Créer version.txt pour GitHub
+  await fs.promises.writeFile(path.join('dist', 'version.txt'), VERSION);
+  console.log('Created version.txt');
+
+  console.log('');
+  console.log('╔════════════════════════════════════════════╗');
+  console.log('║  ✅ Build completed successfully!          ║');
+  console.log('╠════════════════════════════════════════════╣');
+  console.log('║  📁 Output files:                          ║');
+  console.log('║  • dist/SurvevHack.user.js                 ║');
+  console.log('║  • dist/SurvevHack-Extension.zip           ║');
+  console.log('║  • dist/version.txt                        ║');
+  if (mode !== MODES.DEV) {
+    console.log('║  • dist/min.test.obfuscated.js             ║');
+  }
+  console.log('╚════════════════════════════════════════════╝');
+  console.log('');
 };
 
 runBuild(process.argv.slice(2)).catch((error) => {

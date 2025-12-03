@@ -20,18 +20,18 @@ const Main = ({ settings, onSettingChange }) => {
       <div className={`group ${!settings.aimbot_.enabled_ ? 'hidden' : ''}`}>
         <WarningSlider
           id="aim-smooth"
-          label="Smooth"
+          label="Smoothness"
           value={settings.aimbot_.smooth_}
           onChange={(v) => onSettingChange((s) => (s.aimbot_.smooth_ = v))}
           shouldWarning={(v) => v <= 20}
         />
         <Checkbox
           id="target-knocked"
-          label="Target Knocked"
+          label="Target Knocked Players"
           checked={settings.aimbot_.targetKnocked_}
           onChange={(v) => onSettingChange((s) => (s.aimbot_.targetKnocked_ = v))}
         />
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.625rem' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
           <Checkbox
             id="sticky-target"
             label="Sticky Target"
@@ -46,14 +46,13 @@ const Main = ({ settings, onSettingChange }) => {
         </div>
         <Checkbox
           id="aimbot-show-dot"
-          label="Aimbot Dot"
+          label="Show Aim Dot"
           checked={settings.aimbot_.showDot_}
           onChange={(v) => onSettingChange((s) => (s.aimbot_.showDot_ = v))}
         />
-        {/* FOV SUPPRIMÉ - Lignes 49-59 enlevées */}
         <WarningCheckbox
           id="aimbot-wallcheck"
-          label="Wallcheck"
+          label="Wall Check"
           checked={settings.aimbot_.wallcheck_}
           onChange={(v) => onSettingChange((s) => (s.aimbot_.wallcheck_ = v))}
           shouldWarning={(v) => !v}
@@ -70,7 +69,7 @@ const Main = ({ settings, onSettingChange }) => {
       <div className={`group ${!settings.meleeLock_.enabled_ ? 'hidden' : ''}`}>
         <Checkbox
           id="auto-melee"
-          label="Auto Melee"
+          label="Auto Melee Attack"
           checked={settings.meleeLock_.autoMelee_}
           onChange={(v) => onSettingChange((s) => (s.meleeLock_.autoMelee_ = v))}
         />
@@ -78,14 +77,14 @@ const Main = ({ settings, onSettingChange }) => {
 
       <SectionTitle
         icon={Icons.AutoSwitch_}
-        label="Auto Switch (UPDATED!)"
+        label="Auto Switch"
         enabled={settings.autoSwitch_.enabled_}
         onEnabledChange={(v) => onSettingChange((s) => (s.autoSwitch_.enabled_ = v))}
       />
       <div className={`group ${!settings.autoSwitch_.enabled_ ? 'hidden' : ''}`}>
         <Checkbox
           id="useonegun"
-          label="Use One Gun"
+          label="Single Weapon Mode"
           checked={settings.autoSwitch_.useOneGun_}
           onChange={(v) => onSettingChange((s) => (s.autoSwitch_.useOneGun_ = v))}
         />
@@ -93,7 +92,7 @@ const Main = ({ settings, onSettingChange }) => {
 
       <SectionTitle
         icon={Icons.SemiAuto_}
-        label="Semi Auto"
+        label="Auto Fire"
         enabled={settings.autoFire_.enabled_}
         onEnabledChange={(v) => onSettingChange((s) => (s.autoFire_.enabled_ = v))}
       />

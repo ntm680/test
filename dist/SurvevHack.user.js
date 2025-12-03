@@ -1,3 +1,16 @@
+// ==UserScript==
+// @name         SurvevHack
+// @version      3.2.0
+// @description  A cheat for survev.io & more
+// @author       survevhack
+// @match        *://*/*
+// @run-at       document-start
+// @icon         https://i.postimg.cc/W4g7cxLP/image.png
+// @updateURL    https://raw.githubusercontent.com/survevhack/SurvevHack/main/SurvevHack.user.js
+// @downloadURL  https://raw.githubusercontent.com/survevhack/SurvevHack/main/SurvevHack.user.js
+// @grant        none
+// ==/UserScript==
+
 /*
 © 2025 SurvevHack
 */

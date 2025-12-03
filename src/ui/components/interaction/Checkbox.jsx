@@ -19,12 +19,14 @@ const Checkbox = ({ id, label, checked, onChange, style = {}, warning = false })
         }}
         className={`checkbox ${checked ? 'checkbox-checked' : ''}`}
       />
-      <label htmlFor={id} className="checkbox-item-label" onClick={(e) => e.stopPropagation()}>
-        {label}
-      </label>
+      {label && (
+        <label htmlFor={id} className="checkbox-item-label" onClick={(e) => e.stopPropagation()}>
+          {label}
+        </label>
+      )}
       {warning && (
-        <span className="risky-label" style={{ marginLeft: '0.5rem' }}>
-          RISKY!!!
+        <span className="risky-label">
+          RISKY
         </span>
       )}
     </div>

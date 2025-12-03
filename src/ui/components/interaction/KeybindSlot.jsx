@@ -5,15 +5,15 @@ import { Icons } from '@/ui/components/icons.jsx';
 
 const formatKeyCode = (code) => {
   const keyMap = {
-    ShiftRight: 'Right Shift',
-    ShiftLeft: 'Left Shift',
-    ControlRight: 'Right Ctrl',
-    ControlLeft: 'Left Ctrl',
-    AltRight: 'Right Alt',
-    AltLeft: 'Left Alt',
+    ShiftRight: 'R-Shift',
+    ShiftLeft: 'L-Shift',
+    ControlRight: 'R-Ctrl',
+    ControlLeft: 'L-Ctrl',
+    AltRight: 'R-Alt',
+    AltLeft: 'L-Alt',
     Space: 'Space',
     Enter: 'Enter',
-    Escape: 'Escape',
+    Escape: 'Esc',
   };
 
   if (keyMap[code]) return keyMap[code];
