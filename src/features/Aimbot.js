@@ -1,18 +1,17 @@
-import { settings, getUIRoot, inputState, aimState } from '@/core/state.js';
-import { findTeam, findBullet, findWeapon, inputCommands } from '@/utils/constants.js';
-import { gameManager } from '@/core/state.js';
-import { translations } from '@/core/obfuscatedNameTranslator.js';
-import { ref_addEventListener } from '@/core/hook.js';
-import { isLayerSpoofActive, originalLayerValue } from '@/features/LayerSpoofer.js';
+import { gameManager, getUIRoot, inputState, settings } from '@/core/state.js';
+
 import {
-  AimState,
-  setAimState,
-  getCurrentAimPosition,
-  getPing,
   aimOverlays,
+  AimState,
+  getPing,
+  setAimState
 } from '@/core/aimController.js';
-import { outerDocument, outer } from '@/core/outer.js';
-import { v2, collisionHelpers, sameLayer } from '@/utils/math.js';
+import { ref_addEventListener } from '@/core/hook.js';
+import { translations } from '@/core/obfuscatedNameTranslator.js';
+import { outer } from '@/core/outer.js';
+import { isLayerSpoofActive, originalLayerValue } from '@/features/LayerSpoofer.js';
+import { findBullet, findTeam, findWeapon, inputCommands } from '@/utils/constants.js';
+import { collisionHelpers, sameLayer, v2 } from '@/utils/math.js';
 
 const isBypassLayer = (layer) => layer === 2 || layer === 3;
 
@@ -21,35 +20,11 @@ const state = {
   previousEnemies_: {},
   currentEnemy_: null,
   meleeLockEnemy_: null,
-  velocityBuffer_: {},
   lastTargetScreenPos_: null,
+  lastPredictionTime_: 0,
 };
 
-const AIM_SMOOTH_DISTANCE_PX = 4; // Réduit de 6 à 4 pour être plus réactif
-const AIM_SMOOTH_ANGLE = Math.PI / 120; // Plus sensible aux changements d'angle
 const MELEE_ENGAGE_DISTANCE = 5.5;
-
-const computeAimAngle = (point) => {
-  if (!point) return 0;
-  const centerX = outer.innerWidth / 2;
-  const centerY = outer.innerHeight / 2;
-  return Math.atan2(point.y - centerY, point.x - centerX);
-};
-
-const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
-
-const shouldSmoothAim = (currentPos, nextPos) => {
-  if (!nextPos) return false;
-  if (!currentPos) return true;
-
-  const distance = Math.hypot(nextPos.x - currentPos.x, nextPos.y - currentPos.y);
-  if (distance > AIM_SMOOTH_DISTANCE_PX) return true;
-
-  const angleDiff = Math.abs(
-    normalizeAngle(computeAimAngle(nextPos) - computeAimAngle(currentPos))
-  );
-  return angleDiff > AIM_SMOOTH_ANGLE;
-};
 
 const getLocalLayer = (player) => {
   if (isBypassLayer(player.layer)) return player.layer;
@@ -62,108 +37,52 @@ const meetsLayerCriteria = (targetLayer, localLayer, isLocalOnBypass) => {
   return targetLayer === localLayer;
 };
 
+// ============================================
+// OBSTACLE DETECTION
+// ============================================
+
 const BLOCKING_OBSTACLE_PATTERNS = [
-  'metal_wall_',
-  'brick_wall_',
-  'concrete_wall_',
-  'stone_wall_',
-  'container_wall_',
-  '_wall_int_',
-  'bank_wall_',
-  'barn_wall_',
-  'cabin_wall_',
-  'hut_wall_',
-  'house_wall_',
-  'mansion_wall_',
-  'police_wall_',
-  'shack_wall_',
-  'outhouse_wall_',
-  'teahouse_wall_',
-  'warehouse_wall_',
-  'silo_',
-  'bollard_',
-  'sandbags_',
-  'hedgehog',
+  'metal_wall_', 'brick_wall_', 'concrete_wall_', 'stone_wall_',
+  'container_wall_', '_wall_int_', 'bank_wall_', 'barn_wall_',
+  'cabin_wall_', 'hut_wall_', 'house_wall_', 'mansion_wall_',
+  'police_wall_', 'shack_wall_', 'outhouse_wall_', 'teahouse_wall_',
+  'warehouse_wall_', 'silo_', 'bollard_', 'sandbags_', 'hedgehog',
 ];
 
 const NON_BLOCKING_OBSTACLE_PATTERNS = [
-  'tree_',
-  'bush_',
-  'brush_',
-  'crate_',
-  'barrel_',
-  'refrigerator_',
-  'control_panel_',
-  'chest_',
-  'case_',
-  'oven_',
-  'bed_',
-  'bookshelf_',
-  'couch_',
-  'table_',
-  'drawers_',
-  'window',
-  'glass_wall_',
-  'locker_',
-  'deposit_box_',
-  'toilet_',
-  'pot_',
-  'planter_',
-  'pumpkin_',
-  'potato_',
-  'egg_',
-  'woodpile_',
-  'decal',
-  'stone_01',
-  'stone_02',
-  'stone_03',
-  'stone_04',
-  'stone_05',
-  'stone_06',
-  'stone_07',
-  'stone_08',
-  'stone_09',
-  'stone_0',
+  'tree_', 'bush_', 'brush_', 'crate_', 'barrel_', 'refrigerator_',
+  'control_panel_', 'chest_', 'case_', 'oven_', 'bed_', 'bookshelf_',
+  'couch_', 'table_', 'drawers_', 'window', 'glass_wall_', 'locker_',
+  'deposit_box_', 'toilet_', 'pot_', 'planter_', 'pumpkin_', 'potato_',
+  'egg_', 'woodpile_', 'decal', 'stone_0',
 ];
 
 const isObstacleBlocking = (obstacle) => {
   if (obstacle.collidable === false) return false;
-
   const obstacleType = obstacle.type || '';
-
   if (obstacle.isWall === true) return true;
-
   if (obstacle.destructible === false) return true;
-
   for (const pattern of BLOCKING_OBSTACLE_PATTERNS) {
     if (obstacleType.includes(pattern)) return true;
   }
-
   for (const pattern of NON_BLOCKING_OBSTACLE_PATTERNS) {
     if (obstacleType.includes(pattern)) return false;
   }
-
-  if (obstacle.health !== undefined && obstacle.health > 200) {
-    return true;
-  }
-
+  if (obstacle.health !== undefined && obstacle.health > 200) return true;
   return false;
 };
 
 const canCastToPlayer = (localPlayer, targetPlayer, weapon, bullet) => {
-  if (!weapon || !bullet) {
-    return true;
-  }
+  if (!weapon || !bullet) return true;
 
   const game = gameManager.game;
   const idToObj = game?.[translations.objectCreator_]?.[translations.idToObj_];
-  if (!idToObj) {
-    return true;
-  }
+  if (!idToObj) return true;
 
   const BULLET_HEIGHT = 0.25;
-  const trueLayer =
-    isLayerSpoofActive && originalLayerValue !== undefined ? originalLayerValue : localPlayer.layer;
+  const trueLayer = isLayerSpoofActive && originalLayerValue !== undefined
+    ? originalLayerValue
+    : localPlayer.layer;
 
   const playerPos = localPlayer[translations.visualPos_];
   const targetPos = targetPlayer[translations.visualPos_];
@@ -171,15 +90,7 @@ const canCastToPlayer = (localPlayer, targetPlayer, weapon, bullet) => {
   const dx = targetPos.x - playerPos.x;
   const dy = targetPos.y - playerPos.y;
   const aimAngle = Math.atan2(dy, dx);
-
-  const dir = v2.create_(Math.cos(aimAngle), Math.sin(aimAngle));
-
-  const baseSpread = (weapon.shotSpread || 0) * (Math.PI / 180);
-  const generousSpread = baseSpread * 1.5;
-
   const maxDistance = Math.hypot(dx, dy);
-
-  const rayCount = Math.max(15, Math.ceil((weapon.shotSpread || 0) * 1.5));
 
   const allObstacles = Object.values(idToObj).filter((obj) => {
     if (!obj.collider) return false;
@@ -190,19 +101,19 @@ const canCastToPlayer = (localPlayer, targetPlayer, weapon, bullet) => {
   });
 
   const blockingObstacles = allObstacles.filter(isObstacleBlocking);
+  if (blockingObstacles.length === 0) return true;
 
-  if (blockingObstacles.length === 0) {
-    return true;
-  }
+  const baseSpread = (weapon.shotSpread || 0) * (Math.PI / 180);
+  const generousSpread = baseSpread * 1.5;
+  const rayCount = Math.max(15, Math.ceil((weapon.shotSpread || 0) * 1.5));
 
   for (let i = 0; i < rayCount; i++) {
     const t = rayCount === 1 ? 0.5 : i / (rayCount - 1);
     const rayAngle = aimAngle - generousSpread / 2 + generousSpread * t;
     const rayDir = v2.create_(Math.cos(rayAngle), Math.sin(rayAngle));
-
     const endPos = v2.add_(playerPos, v2.mul_(rayDir, maxDistance));
-    let blocked = false;
 
+    let blocked = false;
     for (const obstacle of blockingObstacles) {
       const collision = collisionHelpers.intersectSegment_(obstacle.collider, playerPos, endPos);
       if (collision) {
@@ -213,19 +124,14 @@ const canCastToPlayer = (localPlayer, targetPlayer, weapon, bullet) => {
         }
       }
     }
-
-    if (!blocked) {
-      return true;
-    }
+    if (!blocked) return true;
   }
-
   return false;
 };
 
-const queueInput = (command) => {
-  // Bloqué pour éviter auto-switch
-  return;
-};
+// ============================================
+// KEYBOARD HANDLER
+// ============================================
 
 const handleKeydown = (event) => {
   if (event.code !== settings.keybinds_.toggleStickyTarget_) return;
@@ -243,145 +149,140 @@ Reflect.apply(ref_addEventListener, outer, ['keydown', handleKeydown]);
 
 let tickerAttached = false;
 
+// ============================================
+// UTILS
+// ============================================
+
 function getDistance(x1, y1, x2, y2) {
   return (x1 - x2) ** 2 + (y1 - y2) ** 2;
+}
+
+function getDistanceReal(x1, y1, x2, y2) {
+  return Math.sqrt((x1 - x2) ** 2 + (y1 - y2) ** 2);
 }
 
 function calcAngle(playerPos, mePos) {
   const dx = mePos.x - playerPos.x;
   const dy = mePos.y - playerPos.y;
-
   return Math.atan2(dy, dx);
 }
+
+// ============================================
+// PRÉDICTION AMÉLIORÉE V2
+// ============================================
 
 function predictPosition(enemy, currentPlayer) {
   if (!enemy || !currentPlayer) return null;
 
   const enemyPos = enemy[translations.visualPos_];
-  const currentPlayerPos = currentPlayer[translations.visualPos_];
+  const playerPos = currentPlayer[translations.visualPos_];
   const now = performance.now();
   const enemyId = enemy.__id;
-  const ping = getPing() / 2;
 
-  const history = state.previousEnemies_[enemyId] ?? (state.previousEnemies_[enemyId] = []);
-  history.push([now, { ...enemyPos }]);
-  if (history.length > 30) history.shift(); // Plus d'historique pour meilleure prédiction
-
-  // Réduit les frames nécessaires pour commencer à prédire
-  if (history.length < 5) {
-    return gameManager.game[translations.camera_][translations.pointToScreen_]({
-      x: enemyPos.x,
-      y: enemyPos.y,
-    });
-  }
-
-  // Calcul amélioré de la vélocité avec détection de zigzag
-  const deltaTime = (now - history[0][0]) / 1000;
-
-  // Vélocité instantanée (dernières 2 frames)
-  const instantVelocity = {
-    x: (enemyPos.x - history[history.length - 2][1].x) / ((now - history[history.length - 2][0]) / 1000),
-    y: (enemyPos.y - history[history.length - 2][1].y) / ((now - history[history.length - 2][0]) / 1000),
-  };
-
-  // Vélocité moyenne sur toute l'histoire
-  const avgVelocity = {
-    x: (enemyPos.x - history[0][1].x) / deltaTime,
-    y: (enemyPos.y - history[0][1].y) / deltaTime,
-  };
-
-  // Détection de zigzag (changements de direction fréquents)
-  let directionChanges = 0;
-  for (let i = 2; i < history.length; i++) {
-    const v1x = history[i][1].x - history[i - 1][1].x;
-    const v2x = history[i - 1][1].x - history[i - 2][1].x;
-    const v1y = history[i][1].y - history[i - 1][1].y;
-    const v2y = history[i - 1][1].y - history[i - 2][1].y;
-
-    // Produit scalaire pour détecter changement de direction
-    if ((v1x * v2x + v1y * v2y) < 0) {
-      directionChanges++;
-    }
-  }
-
-  const isZigzagging = directionChanges > history.length * 0.3; // Plus de 30% de changements
-
-  // Si zigzag : privilégie position actuelle, sinon : privilégie prédiction
-  const velocity = {
-    x: isZigzagging ? (instantVelocity.x * 0.9 + avgVelocity.x * 0.1) : (instantVelocity.x * 0.7 + avgVelocity.x * 0.3),
-    y: isZigzagging ? (instantVelocity.y * 0.9 + avgVelocity.y * 0.1) : (instantVelocity.y * 0.7 + avgVelocity.y * 0.3),
-  };
-
+  // Récupérer l'arme et la balle
   const weapon = findWeapon(currentPlayer);
   const bullet = findBullet(weapon);
-  const bulletSpeed = bullet?.speed || 1000;
+  const bulletSpeed = bullet?.speed || 100;
 
-  const { x: vex, y: vey } = velocity;
-  const dx = enemyPos.x - currentPlayerPos.x;
-  const dy = enemyPos.y - currentPlayerPos.y;
-  const vb = bulletSpeed;
+  // Initialiser l'historique si nécessaire
+  if (!state.previousEnemies_[enemyId]) {
+    state.previousEnemies_[enemyId] = { positions: [] };
+  }
 
-  const a = vb ** 2 - vex ** 2 - vey ** 2;
-  const b = -2 * (vex * dx + vey * dy);
-  const c = -(dx ** 2) - dy ** 2;
+  const history = state.previousEnemies_[enemyId];
 
-  let t;
+  // Ajouter position actuelle
+  history.positions.push({ time: now, x: enemyPos.x, y: enemyPos.y });
 
-  // Compensation du ping améliorée selon la distance
-  const distanceToTarget = Math.hypot(dx, dy);
-  const isLongRange = distanceToTarget > 40; // Considéré comme loin au-delà de 40 unités
+  // Garder 6 positions max
+  while (history.positions.length > 6) {
+    history.positions.shift();
+  }
 
-  // Plus de compensation pour les longues distances
-  const pingMultiplier = isLongRange ? 1.5 : 1.3;
-  const pingCompensation = ping * pingMultiplier;
+  // Pas assez d'historique = viser position actuelle
+  if (history.positions.length < 2) {
+    return gameManager.game[translations.camera_][translations.pointToScreen_](enemyPos);
+  }
 
-  if (Math.abs(a) < 1e-6) {
-    t = -c / b + pingCompensation;
-  } else {
-    const discriminant = b ** 2 - 4 * a * c;
-    if (discriminant < 0) {
-      return gameManager.game[translations.camera_][translations.pointToScreen_]({
-        x: enemyPos.x,
-        y: enemyPos.y,
-      });
-    }
+  // Calculer vélocité moyenne sur les dernières positions
+  const positions = history.positions;
+  let totalVelX = 0;
+  let totalVelY = 0;
+  let count = 0;
 
-    const sqrtD = Math.sqrt(discriminant);
-    const t1 = (-b - sqrtD) / (2 * a);
-    const t2 = (-b + sqrtD) / (2 * a);
-    t = (Math.min(t1, t2) > 0 ? Math.min(t1, t2) : Math.max(t1, t2)) + pingCompensation;
-
-    if (t < 0 || t > 5) {
-      return gameManager.game[translations.camera_][translations.pointToScreen_]({
-        x: enemyPos.x,
-        y: enemyPos.y,
-      });
+  for (let i = 1; i < positions.length; i++) {
+    const dt = (positions[i].time - positions[i - 1].time) / 1000;
+    if (dt > 0.001 && dt < 0.5) { // Ignorer les deltas trop grands ou trop petits
+      totalVelX += (positions[i].x - positions[i - 1].x) / dt;
+      totalVelY += (positions[i].y - positions[i - 1].y) / dt;
+      count++;
     }
   }
 
-  // Prédiction avec compensation selon vitesse et distance
-  const speed = Math.hypot(velocity.x, velocity.y);
-
-  // Facteur d'accélération adaptatif
-  let accelerationFactor = 1.0;
-  if (isZigzagging) {
-    // Pour zigzag : moins de prédiction, vise plus la position actuelle
-    accelerationFactor = 0.7;
-  } else if (isLongRange) {
-    // Pour longue distance : plus de prédiction
-    accelerationFactor = speed > 5 ? 1.35 : 1.15;
-  } else {
-    // Distance normale
-    accelerationFactor = speed > 5 ? 1.2 : 1.05;
+  if (count === 0) {
+    return gameManager.game[translations.camera_][translations.pointToScreen_](enemyPos);
   }
 
+  const enemyVelX = totalVelX / count;
+  const enemyVelY = totalVelY / count;
+
+  // Distance entre joueur et ennemi
+  const diffX = enemyPos.x - playerPos.x;
+  const diffY = enemyPos.y - playerPos.y;
+  const distance = Math.hypot(diffX, diffY);
+
+  // Vitesse de l'ennemi
+  const enemySpeed = Math.hypot(enemyVelX, enemyVelY);
+
+  // Si l'ennemi ne bouge presque pas, viser directement
+  if (enemySpeed < 0.3) {
+    return gameManager.game[translations.camera_][translations.pointToScreen_](enemyPos);
+  }
+
+  // Temps de vol de base
+  let t = distance / bulletSpeed;
+
+  // Compensation ping
+  const ping = getPing();
+  t += ping * 0.5;
+
+  // Ajustement selon la vitesse de balle (armes lentes = moins de prédiction)
+  if (bulletSpeed < 80) {
+    // Shotguns - balles lentes, courte distance, moins de prédiction
+    t *= 0.5;
+  } else if (bulletSpeed > 150) {
+    // Snipers - balles rapides, garder prédiction normale
+    t *= 0.95;
+  } else if (bulletSpeed > 100) {
+    // AR/DMR - ajustement moyen
+    t *= 0.85;
+  } else {
+    // SMG/Pistols
+    t *= 0.75;
+  }
+
+  // Réduire la prédiction pour les très longues distances
+  if (distance > 40) {
+    t *= 0.6;
+  } else if (distance > 25) {
+    t *= 0.8;
+  }
+
+  // Limiter le temps de prédiction max
+  t = Math.max(0, Math.min(t, 0.35));
+
+  // Position prédite
   const predictedPos = {
-    x: enemyPos.x + vex * t * accelerationFactor,
-    y: enemyPos.y + vey * t * accelerationFactor,
+    x: enemyPos.x + enemyVelX * t,
+    y: enemyPos.y + enemyVelY * t,
   };
 
   return gameManager.game[translations.camera_][translations.pointToScreen_](predictedPos);
 }
+
+// ============================================
+// FIND TARGET - FOV CENTRÉ SUR LE JOUEUR
+// ============================================
 
 function findTarget(players, me) {
   const meTeam = findTeam(me);
@@ -389,7 +290,13 @@ function findTarget(players, me) {
   const localLayer = getLocalLayer(me);
   let enemy = null;
   let minDistance = Infinity;
-  const fovRadiusSquared = settings.aimbot_.fov_ ** 2;
+
+  const mePos = me[translations.visualPos_];
+  const meScreenPos = gameManager.game[translations.camera_][translations.pointToScreen_](mePos);
+
+  const fovEnabled = settings.aimbot_.fovEnabled_;
+  const fovRadius = settings.aimbot_.fov_;
+  const fovRadiusSquared = fovRadius * fovRadius;
 
   for (const player of players) {
     if (!player.active) continue;
@@ -399,22 +306,15 @@ function findTarget(players, me) {
     if (!meetsLayerCriteria(player.layer, localLayer, isLocalOnBypassLayer)) continue;
     if (findTeam(player) === meTeam) continue;
 
-    const screenPos = gameManager.game[translations.camera_][translations.pointToScreen_]({
-      x: player[translations.visualPos_].x,
-      y: player[translations.visualPos_].y,
-    });
+    const playerPos = player[translations.visualPos_];
+    const screenPos = gameManager.game[translations.camera_][translations.pointToScreen_](playerPos);
 
-    const distance = getDistance(
-      screenPos.x,
-      screenPos.y,
-      gameManager.game[translations.input_].mousePos._x,
-      gameManager.game[translations.input_].mousePos._y
-    );
+    const screenDistance = getDistance(screenPos.x, screenPos.y, meScreenPos.x, meScreenPos.y);
 
-    if (distance > fovRadiusSquared) continue;
+    if (fovEnabled && screenDistance > fovRadiusSquared) continue;
 
-    if (distance < minDistance) {
-      minDistance = distance;
+    if (screenDistance < minDistance) {
+      minDistance = screenDistance;
       enemy = player;
     }
   }
@@ -450,6 +350,10 @@ function findClosestTarget(players, me) {
   return enemy;
 }
 
+// ============================================
+// MAIN TICKER
+// ============================================
+
 function aimbotTicker() {
   try {
     const game = gameManager.game;
@@ -472,75 +376,68 @@ function aimbotTicker() {
     let previewTargetPos = null;
     let isDotTargetShootable = false;
 
+    aimOverlays.updateFovCircle();
+
     try {
-      const currentWeaponIndex =
-        game[translations.activePlayer_][translations.localData_][translations.curWeapIdx_];
+      const currentWeaponIndex = me[translations.localData_][translations.curWeapIdx_];
       const isMeleeEquipped = currentWeaponIndex === 2;
       const isGrenadeEquipped = currentWeaponIndex === 3;
       const isAiming = game[translations.inputBinds_].isBindDown(inputCommands.Fire_);
-      const wantsMeleeLock = settings.meleeLock_.enabled_ && isAiming;
 
-      let meleeEnemy = state.meleeLockEnemy_;
-      if (wantsMeleeLock) {
-        if (
-          !meleeEnemy ||
-          !meleeEnemy.active ||
-          meleeEnemy[translations.netData_][translations.dead_]
-        ) {
-          meleeEnemy = findClosestTarget(players, me);
-          state.meleeLockEnemy_ = meleeEnemy;
+      // === MELEE LOCK AUTO-SWITCH ===
+      const MELEE_AUTO_DISTANCE = 3;
+
+      if (settings.meleeLock_.enabled_) {
+        // Trouver l'ennemi le plus proche
+        const closestEnemy = findClosestTarget(players, me);
+
+        if (closestEnemy) {
+          const mePos = me[translations.visualPos_];
+          const enemyPos = closestEnemy[translations.visualPos_];
+          const distanceToEnemy = Math.hypot(mePos.x - enemyPos.x, mePos.y - enemyPos.y);
+
+          // Si ennemi à distance <= 3, activer melee lock
+          if (distanceToEnemy <= MELEE_AUTO_DISTANCE) {
+            state.meleeLockEnemy_ = closestEnemy;
+
+            // Auto-switch vers melee si option activée ET pas déjà équipée
+            if (settings.meleeLock_.autoMelee_ && !isMeleeEquipped) {
+              inputState.queuedInputs_.push(inputCommands.EquipMelee_);
+            }
+
+            // Lock seulement si melee équipée
+            if (isMeleeEquipped) {
+              const weapon = findWeapon(me);
+              const bullet = findBullet(weapon);
+              const isMeleeTargetShootable = !settings.aimbot_.wallcheck_ || canCastToPlayer(me, closestEnemy, weapon, bullet);
+
+              if (isMeleeTargetShootable) {
+                const moveAngle = calcAngle(enemyPos, mePos) + Math.PI;
+                const moveDir = {
+                  touchMoveActive: true,
+                  touchMoveLen: 255,
+                  x: Math.cos(moveAngle),
+                  y: Math.sin(moveAngle),
+                };
+                const screenPos = game[translations.camera_][translations.pointToScreen_](enemyPos);
+                setAimState(new AimState('meleeLock', { x: screenPos.x, y: screenPos.y }, moveDir, true));
+                aimUpdated = true;
+                aimOverlays.hideAll();
+                state.lastTargetScreenPos_ = null;
+                return;
+              }
+            }
+          } else {
+            state.meleeLockEnemy_ = null;
+          }
+        } else {
+          state.meleeLockEnemy_ = null;
         }
       } else {
-        meleeEnemy = null;
         state.meleeLockEnemy_ = null;
       }
 
-      let distanceToMeleeEnemy = Infinity;
-      if (meleeEnemy) {
-        const mePos = me[translations.visualPos_];
-        const enemyPos = meleeEnemy[translations.visualPos_];
-        distanceToMeleeEnemy = Math.hypot(mePos.x - enemyPos.x, mePos.y - enemyPos.y);
-      }
-
-      const meleeTargetInRange = distanceToMeleeEnemy <= MELEE_ENGAGE_DISTANCE;
-
-      // Auto melee bloqué
-      const meleeLockActive = wantsMeleeLock && isMeleeEquipped && meleeTargetInRange && meleeEnemy;
-
-      if (meleeLockActive) {
-        const mePos = me[translations.visualPos_];
-        const enemyPos = meleeEnemy[translations.visualPos_];
-
-        const weapon = findWeapon(me);
-        const bullet = findBullet(weapon);
-        const isMeleeTargetShootable =
-          !settings.aimbot_.wallcheck_ || canCastToPlayer(me, meleeEnemy, weapon, bullet);
-
-        if (isMeleeTargetShootable) {
-          const moveAngle = calcAngle(enemyPos, mePos) + Math.PI;
-          const moveDir = {
-            touchMoveActive: true,
-            touchMoveLen: 255,
-            x: Math.cos(moveAngle),
-            y: Math.sin(moveAngle),
-          };
-
-          const screenPos = game[translations.camera_][translations.pointToScreen_]({
-            x: enemyPos.x,
-            y: enemyPos.y,
-          });
-          setAimState(new AimState('meleeLock', { x: screenPos.x, y: screenPos.y }, moveDir, true));
-          aimUpdated = true;
-          aimOverlays.hideAll();
-          state.lastTargetScreenPos_ = null;
-          return;
-        }
-      }
-
-      if (wantsMeleeLock && !meleeTargetInRange) {
-        state.meleeLockEnemy_ = null;
-      }
-
+      // === AIMBOT ===
       if (!settings.aimbot_.enabled_ || isMeleeEquipped || isGrenadeEquipped) {
         setAimState(new AimState('idle'));
         aimOverlays.hideAll();
@@ -550,11 +447,9 @@ function aimbotTicker() {
 
       const canEngageAimbot = isAiming;
 
-      let enemy =
-        state.focusedEnemy_?.active &&
-          !state.focusedEnemy_[translations.netData_][translations.dead_]
-          ? state.focusedEnemy_
-          : null;
+      let enemy = state.focusedEnemy_?.active && !state.focusedEnemy_[translations.netData_][translations.dead_]
+        ? state.focusedEnemy_
+        : null;
 
       if (enemy) {
         const localLayer = getLocalLayer(me);
@@ -575,14 +470,9 @@ function aimbotTicker() {
       }
 
       if (enemy) {
-        const mePos = me[translations.visualPos_];
-        const enemyPos = enemy[translations.visualPos_];
-        const distanceToEnemy = Math.hypot(mePos.x - enemyPos.x, mePos.y - enemyPos.y);
-
         if (enemy !== state.currentEnemy_ && !state.focusedEnemy_) {
           state.currentEnemy_ = enemy;
-          state.previousEnemies_[enemy.__id] = [];
-          state.velocityBuffer_[enemy.__id] = [];
+          delete state.previousEnemies_[enemy.__id];
         }
 
         const predictedPos = predictPosition(enemy, me);
@@ -597,30 +487,17 @@ function aimbotTicker() {
 
         const weapon = findWeapon(me);
         const bullet = findBullet(weapon);
+        const isTargetShootable = !settings.aimbot_.wallcheck_ || canCastToPlayer(me, enemy, weapon, bullet);
 
-        const isTargetShootable =
-          !settings.aimbot_.wallcheck_ || canCastToPlayer(me, enemy, weapon, bullet);
-
-        if (
-          canEngageAimbot &&
-          (settings.aimbot_.enabled_ || (settings.meleeLock_.enabled_ && distanceToEnemy <= 8))
-        ) {
+        if (canEngageAimbot && settings.aimbot_.enabled_) {
           if (isTargetShootable) {
-            const currentAimPos = getCurrentAimPosition();
-
-            // Réduit le smooth pour un meilleur snap
-            const effectiveSmooth = settings.aimbot_.smooth_ * 0.7; // 30% plus rapide
-            const shouldSmooth = effectiveSmooth > 0 && shouldSmoothAim(currentAimPos, predictedPos);
-
             setAimState(
-              new AimState('aimbot', { x: predictedPos.x, y: predictedPos.y }, null, !shouldSmooth)
+              new AimState('aimbot', { x: predictedPos.x, y: predictedPos.y }, null, true)
             );
             state.lastTargetScreenPos_ = { x: predictedPos.x, y: predictedPos.y };
             aimUpdated = true;
-            const aimSnapshot = aimState.lastAimPos_;
-            dotTargetPos = aimSnapshot
-              ? { x: aimSnapshot.clientX, y: aimSnapshot.clientY }
-              : { x: predictedPos.x, y: predictedPos.y };
+
+            dotTargetPos = { x: predictedPos.x, y: predictedPos.y };
             isDotTargetShootable = true;
           } else {
             dotTargetPos = { x: predictedPos.x, y: predictedPos.y };
@@ -642,12 +519,13 @@ function aimbotTicker() {
           ? { x: previewTargetPos.x, y: previewTargetPos.y }
           : null;
       }
+
       let displayPos = dotTargetPos;
       if (!displayPos && previewTargetPos) {
         displayPos = { x: previewTargetPos.x, y: previewTargetPos.y };
       }
       aimOverlays.updateDot(displayPos, isDotTargetShootable, !!state.focusedEnemy_);
-      // aimOverlays.updateFovCircle(); // FOV désactivé
+
     } catch (error) {
       aimOverlays.hideAll();
       setAimState(new AimState('idle', null, null, true));
@@ -657,10 +535,14 @@ function aimbotTicker() {
       state.lastTargetScreenPos_ = null;
     }
   } catch (error) {
-    setAimState(new AimState({ mode: 'idle', immediate: true }));
+    setAimState(new AimState('idle', null, null, true));
     state.lastTargetScreenPos_ = null;
   }
 }
+
+// ============================================
+// EXPORT
+// ============================================
 
 export default function () {
   const startTicker = () => {

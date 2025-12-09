@@ -1,6 +1,6 @@
+import { outer } from '@/core/outer.js';
 import { encryptDecrypt } from '@/utils/crypto.js';
 import { initStore, write } from '@/utils/store.js';
-import { outer } from '@/core/outer.js';
 
 export const aimState = {
   lastAimPos_: null,
@@ -30,18 +30,19 @@ export const setGameManager = (gm) => {
 
 export const defaultSettings = {
   aimbot_: {
-    enabled_: true,
+    enabled_: false,
     smooth_: 50,
     targetKnocked_: true,
     stickyTarget_: true,
     showDot_: true,
     wallcheck_: true,
     fov_: 80,
+    fovEnabled_: true,  // ← AJOUTE
     showFov_: true,
   },
   meleeLock_: {
     enabled_: true,
-    autoMelee_: false,
+    autoMelee_: true,
   },
   mobileMovement_: {
     enabled_: false,
@@ -81,43 +82,45 @@ export const defaultSettings = {
   infiniteZoom_: {
     enabled_: true,
   },
-  autoSwitch_: {
+  grenadeTimer_: {
     enabled_: true,
-    useOneGun_: false,
+  },
+  targetInfo_: {
+    enabled_: true,
   },
   weaponSwitch_: {
-    enabled_: false,
+    enabled_: true,
     // Shotguns
     mp220_: true,
     spas12_: true,
-    m870_: false,
-    saiga_: false,
-    super90_: false,
-    usas_: false,
-    m1100_: false,
+    m870_: true,
+    saiga_: true,
+    super90_: true,
+    usas_: true,
+    m1100_: true,
     // Snipers
     mosin_: true,
     sv98_: true,
     awc_: true,
-    scout_: false,
-    model94_: false,
-    blr_: false,
+    scout_: true,
+    model94_: true,
+    blr_: true,
     // DMRs
-    mk12_: false,
-    mk20_: false,
-    m39_: false,
-    svd_: false,
-    garand_: false,
+    mk12_: true,
+    mk20_: true,
+    m39_: true,
+    svd_: true,
+    garand_: true,
     // Pistolets
     ot38_: true,
     ots38_: true,
     deagle_: true,
-    m9_: false,
-    m93r_: false,
-    m1911_: false,
-    p30l_: false,
-    flare_gun_: false,
-    peacemaker_: false,
+    m9_: true,
+    m93r_: true,
+    m1911_: true,
+    p30l_: true,
+    flare_gun_: true,
+    peacemaker_: true,
     // Autres
     groza_: false,
     grozas_: false,
@@ -132,12 +135,21 @@ export const defaultSettings = {
     toggleAimbot_: 'KeyB',
     toggleStickyTarget_: 'KeyN',
     toggleLayerSpoof_: 'KeyT',
+    toggleXray_: 'KeyX',
+    toggleESP_: 'KeyV',
+    toggleGrenadeTimer_: 'KeyG',
+    toggleSpinbot_: 'KeyY',  // ← AJOUTE
   },
   misc_: {
     discordNotifShown_: false,
   },
   damageCounter_: {
     enabled_: true,
+  },
+  spinbot_: {
+    enabled_: false,
+    speed_: 50,
+    keybind_: 'KeyY'
   },
 };
 
@@ -151,6 +163,7 @@ const settingsKeys = {
     showDot_: 'sd',
     wallcheck_: 'wc',
     fov_: 'fv',
+    fovEnabled_: 'fe',  // ← AJOUTE
     showFov_: 'sf',
   },
   meleeLock_: {
@@ -205,10 +218,13 @@ const settingsKeys = {
     _k: 'iz',
     enabled_: 'e',
   },
-  autoSwitch_: {
-    _k: 'as',
+  grenadeTimer_: {
+    _k: 'gt',
     enabled_: 'e',
-    useOneGun_: 'uo',
+  },
+  targetInfo_: {
+    _k: 'ti',
+    enabled_: 'e',
   },
   weaponSwitch_: {
     _k: 'ws',
@@ -255,6 +271,10 @@ const settingsKeys = {
     toggleAimbot_: 'ta',
     toggleStickyTarget_: 'ts',
     toggleLayerSpoof_: 'tl',
+    toggleXray_: 'tx',
+    toggleESP_: 'te',
+    toggleGrenadeTimer_: 'tg',
+    toggleSpinbot_: 'tb',  // ← AJOUTE
   },
   misc_: {
     _k: 'mi',
@@ -263,6 +283,12 @@ const settingsKeys = {
   damageCounter_: {
     _k: 'dc',
     enabled_: 'e',
+  },
+  spinbot_: {
+    _k: 'sb',
+    enabled_: 'e',
+    speed_: 's',
+    keybind_: 'k',
   },
 };
 
@@ -299,54 +325,53 @@ const createSettings = (keys, defaults) => {
             } else {
               store[fullPath] = Boolean(v);
             }
+            write(settings._serialize());
           },
-          enumerable: true,
         });
       }
     }
     return result;
   };
 
-  for (const topKey in keys) {
-    obj[topKey] = build(keys[topKey], defaults[topKey], topKey);
+  for (const section in keys) {
+    obj[section] = build(keys[section], defaults[section], section);
   }
 
   const serialize = () => {
-    const serializeGroup = (k, prefix) => {
-      const result = {};
-      for (const prop in k) {
-        if (prop === '_k') continue;
-        const key = k[prop];
-        if (typeof key === 'object' && key._k) {
-          result[key._k] = serializeGroup(key, prefix + '.' + prop);
-        } else {
-          const fullPath = prefix + '.' + prop;
-          result[key] = store[fullPath];
+    const compact = {};
+    for (const section in keys) {
+      const sectionKey = keys[section]._k;
+      compact[sectionKey] = {};
+      const serializeGroup = (k, path, target) => {
+        for (const prop in k) {
+          if (prop === '_k') continue;
+          const key = k[prop];
+          const fullPath = path + '.' + prop;
+          if (typeof key === 'object' && key._k) {
+            target[key._k] = {};
+            serializeGroup(key, fullPath, target[key._k]);
+          } else {
+            target[key] = store[fullPath];
+          }
         }
-      }
-      return result;
-    };
-
-    const result = {};
-    for (const topKey in keys) {
-      result[keys[topKey]._k] = serializeGroup(keys[topKey], topKey);
+      };
+      serializeGroup(keys[section], section, compact[sectionKey]);
     }
-    return result;
+    return compact;
   };
 
   const deserialize = (data) => {
-    if (!data || typeof data !== 'object') return;
-
+    if (!data) return;
     const deserializeGroup = (k, d, prefix) => {
-      if (!d || typeof d !== 'object') return;
       for (const prop in k) {
         if (prop === '_k') continue;
         const key = k[prop];
         if (typeof key === 'object' && key._k) {
-          const nested = d[key._k];
-          deserializeGroup(key, nested, prefix + '.' + prop);
+          if (d && d[key._k]) {
+            deserializeGroup(key, d[key._k], prefix + '.' + prop);
+          }
         } else {
-          const value = d[key];
+          const value = d?.[key];
           if (value !== undefined) {
             const fullPath = prefix + '.' + prop;
             if (typeof store[fullPath] === 'number') {
@@ -375,6 +400,7 @@ const createSettings = (keys, defaults) => {
 
 export const settings = createSettings(settingsKeys, defaultSettings);
 
+// UI Root management
 let uiRoot;
 
 export const setUIRoot = (root) => {
@@ -383,6 +409,7 @@ export const setUIRoot = (root) => {
 
 export const getUIRoot = () => uiRoot;
 
+// Config persistence
 let configLoaded = false;
 let isUpdatingConfig = false;
 let lastConfig;

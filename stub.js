@@ -25,7 +25,7 @@ MutationObserver_prototype_disconnect.apply = Function_prototype_apply;
 
 // Version actuelle (sera remplacée par build.js)
 const CURRENT_VERSION = '__CURRENT_VERSION__';
-const GITHUB_REPO = 'survevhack/SurvevHack';
+const GITHUB_REPO = 'bro445/Survevmod';
 const GITHUB_URL = 'https://github.com/' + GITHUB_REPO;
 
 console.log('[SurvevHack] Version actuelle: ' + CURRENT_VERSION);

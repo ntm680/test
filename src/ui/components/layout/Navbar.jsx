@@ -1,12 +1,12 @@
-import React from 'react';
-import { Target, Eye, Settings, HelpCircle } from 'lucide-preact';
+import { Crosshair, Eye, HelpCircle, Settings, Target } from 'lucide-preact';
 
 const Navbar = ({ activeTab, onTabChange, onClose }) => {
   const tabs = [
-    { id: 'main', label: 'Combat', icon: Target },
-    { id: 'visuals', label: 'Visuals', icon: Eye },
-    { id: 'misc', label: 'Misc', icon: Settings },
-    { id: 'help', label: 'Help', icon: HelpCircle },
+    { id: 'main', label: 'COMBAT', icon: Target },
+    { id: 'visuals', label: 'VISUAL', icon: Eye },
+    { id: 'weapons', label: 'ARMES', icon: Crosshair },
+    { id: 'misc', label: 'MISC', icon: Settings },
+    { id: 'help', label: 'HELP', icon: HelpCircle },
   ];
 
   return (
@@ -15,6 +15,7 @@ const Navbar = ({ activeTab, onTabChange, onClose }) => {
         {tabs.map((tab) => {
           const isActiveTab = activeTab === tab.id;
           const Icon = tab.icon;
+          const isHelp = tab.id === 'help';
 
           return (
             <button
@@ -22,8 +23,14 @@ const Navbar = ({ activeTab, onTabChange, onClose }) => {
               className={`nav-tab ${isActiveTab ? 'active' : ''}`}
               data-tab={tab.id}
               onClick={() => onTabChange(tab.id)}
+              style={{
+                padding: '0.3rem 0.5rem',
+                fontSize: '0.65rem',
+                background: isHelp && !isActiveTab ? 'rgba(0, 212, 255, 0.1)' : undefined,
+                borderColor: isHelp && !isActiveTab ? '#00d4ff' : undefined,
+              }}
             >
-              <Icon size={12} style={{ marginRight: '0.25rem' }} />
+              <Icon size={11} style={{ marginRight: '0.2rem' }} />
               {tab.label}
             </button>
           );

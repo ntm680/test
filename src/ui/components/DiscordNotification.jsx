@@ -1,8 +1,11 @@
+// DiscordNotification.jsx
+
 import React, { useState, useEffect, useRef } from 'react';
 import { outer, outerDocument } from '@/core/outer.js';
 import { ref_addEventListener, ref_removeEventListener } from '@/core/hook';
 
 const DiscordNotification = ({ settings, onSettingChange }) => {
+  // L'état et toute la logique sont conservés mais ne seront plus utilisés.
   const [isVisible, setIsVisible] = useState(true);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
@@ -87,8 +90,11 @@ const DiscordNotification = ({ settings, onSettingChange }) => {
     };
   }, [isDragging, dragStart, position]);
 
-  if (!isVisible) return null;
+  // CHANGEMENT APPLIQUÉ: Nous retournons toujours 'null' pour ne jamais afficher la popup.
+  return null;
 
+  /*
+  // ANCIEN CODE DU RENDU SUPPRIMÉ:
   const containerStyle = {
     position: 'fixed',
     left: `${position.x}px`,
@@ -156,6 +162,7 @@ const DiscordNotification = ({ settings, onSettingChange }) => {
       </div>
     </div>
   );
+  */
 };
 
 export default DiscordNotification;

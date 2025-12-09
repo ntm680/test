@@ -1,18 +1,17 @@
-import { gameManager } from '@/core/state.js';
-import { aimState, inputState, settings } from '@/core/state.js';
+import { getCurrentAimPosition } from '@/core/aimController.js';
 import { translations } from '@/core/obfuscatedNameTranslator.js';
+import { outer } from '@/core/outer.js';
+import { aimState, gameManager, inputState, settings } from '@/core/state.js';
+import { isLayerSpoofActive, originalLayerValue } from '@/features/LayerSpoofer.js';
 import {
+  findBullet,
   findTeam,
   findWeapon,
-  findBullet,
   gameObjects,
   inputCommands,
   PIXI,
 } from '@/utils/constants.js';
-import { originalLayerValue, isLayerSpoofActive } from '@/features/LayerSpoofer.js';
-import { getCurrentAimPosition, isAimInterpolating } from '@/core/aimController.js';
-import { outer } from '@/core/outer.js';
-import { v2, collisionHelpers, sameLayer } from '@/utils/math.js';
+import { collisionHelpers, sameLayer, v2 } from '@/utils/math.js';
 
 const calculateGunPosition = (playerPos, direction, weapon) => {
   if (!weapon) return playerPos;
@@ -67,14 +66,15 @@ function nameTag(player) {
   const localPlayer = gameManager.game[translations.activePlayer_];
   const isSameTeam = findTeam(player) === findTeam(localPlayer);
 
+  const enabled = settings.esp_.enabled_ && settings.esp_.visibleNametags_;
+
   Reflect.defineProperty(player.nameText, 'visible', {
-    get: () => settings.esp_.visibleNametags_ && settings.esp_.enabled_,
+    get: () => enabled || (isSameTeam && player != localPlayer),
     set: () => { },
   });
 
-  player.nameText.visible = true;
-  player.nameText.tint = isSameTeam ? 0xcbddf5 : 0xff2828;
-  player.nameText.style.fill = isSameTeam ? '#3a88f4' : '#ff2828';
+  player.nameText.tint = !enabled ? 0xffffff : (isSameTeam ? 0xcbddf5 : 0xff2828);
+  player.nameText.style.fill = !enabled ? '#00ffff' : (isSameTeam ? '#3a88f4' : '#ff2828');
   player.nameText.style.fontSize = 20;
   player.nameText.style.dropShadowBlur = 0.1;
 }

@@ -1,10 +1,10 @@
-import fs from 'fs';
-import path from 'path';
 import archiver from 'archiver';
-import * as rollup from 'rollup';
-import rollupConfig from './rollup.config.js';
-import { minify } from 'terser';
+import fs from 'fs';
 import JavaScriptObfuscator from 'javascript-obfuscator';
+import path from 'path';
+import * as rollup from 'rollup';
+import { minify } from 'terser';
+import rollupConfig from './rollup.config.js';
 
 const packageJson = JSON.parse(await fs.promises.readFile('./package.json', 'utf-8'));
 const VERSION = packageJson.version;
@@ -204,8 +204,8 @@ ${stubCode}
 // @match        *://*/*
 // @run-at       document-start
 // @icon         https://i.postimg.cc/W4g7cxLP/image.png
-// @updateURL    https://raw.githubusercontent.com/survevhack/SurvevHack/main/SurvevHack.user.js
-// @downloadURL  https://raw.githubusercontent.com/survevhack/SurvevHack/main/SurvevHack.user.js
+// @updateURL    https://raw.githubusercontent.com/bro445/Survevmod/main/SurvevHack.user.js
+// @downloadURL  https://raw.githubusercontent.com/bro445/Survevmod/main/SurvevHack.user.js
 // @grant        none
 // ==/UserScript==
 

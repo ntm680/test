@@ -5,11 +5,12 @@ import MainTab from '@/ui/components/tabs/Main.jsx';
 import VisualsTab from '@/ui/components/tabs/Visuals.jsx';
 import MiscTab from '@/ui/components/tabs/Misc.jsx';
 import HelpTab from '@/ui/components/tabs/Help.jsx';
+import WeaponsTab from '@/ui/components/tabs/Weapons.jsx';
 import { outer, outerDocument } from '@/core/outer.js';
 import { ref_addEventListener, ref_removeEventListener } from '@/core/hook';
 
 const Menu = ({ settings, onSettingChange, onClose, version }) => {
-  const [activeTab, setActiveTab] = useState('help');
+  const [activeTab, setActiveTab] = useState('main');
   const [position, setPosition] = useState({ x: 175, y: 125 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
@@ -39,19 +40,15 @@ const Menu = ({ settings, onSettingChange, onClose, version }) => {
         let newX = e.clientX - dragStart.x;
         let newY = e.clientY - dragStart.y;
 
-        const minX = -(menuWidth - minVisibleWidth);
         const maxX = outer.innerWidth - minVisibleWidth;
-
-        const minY = 0;
+        const minX = -(menuWidth - minVisibleWidth);
         const maxY = outer.innerHeight - titlebarRect.height;
+        const minY = 0;
 
         newX = Math.max(minX, Math.min(maxX, newX));
         newY = Math.max(minY, Math.min(maxY, newY));
 
-        setPosition({
-          x: newX,
-          y: newY,
-        });
+        setPosition({ x: newX, y: newY });
       }
     };
 
@@ -60,13 +57,13 @@ const Menu = ({ settings, onSettingChange, onClose, version }) => {
     };
 
     if (isDragging) {
-      Reflect.apply(ref_addEventListener, outerDocument, ['mousemove', handleMouseMove]);
-      Reflect.apply(ref_addEventListener, outerDocument, ['mouseup', handleMouseUp]);
+      Reflect.apply(ref_addEventListener, outer, ['mousemove', handleMouseMove]);
+      Reflect.apply(ref_addEventListener, outer, ['mouseup', handleMouseUp]);
     }
 
     return () => {
-      Reflect.apply(ref_removeEventListener, outerDocument, ['mousemove', handleMouseMove]);
-      Reflect.apply(ref_removeEventListener, outerDocument, ['mouseup', handleMouseUp]);
+      Reflect.apply(ref_removeEventListener, outer, ['mousemove', handleMouseMove]);
+      Reflect.apply(ref_removeEventListener, outer, ['mouseup', handleMouseUp]);
     };
   }, [isDragging, dragStart]);
 
@@ -82,10 +79,10 @@ const Menu = ({ settings, onSettingChange, onClose, version }) => {
       const menuWidth = menuElement.offsetWidth;
       const minVisibleWidth = 100;
 
-      const minX = -(menuWidth - minVisibleWidth);
       const maxX = outer.innerWidth - minVisibleWidth;
-      const minY = 0;
+      const minX = -(menuWidth - minVisibleWidth);
       const maxY = outer.innerHeight - titlebarRect.height;
+      const minY = 0;
 
       setPosition((prev) => ({
         x: Math.max(minX, Math.min(maxX, prev.x)),
@@ -117,12 +114,14 @@ const Menu = ({ settings, onSettingChange, onClose, version }) => {
         return <MainTab settings={settings} onSettingChange={onSettingChange} />;
       case 'visuals':
         return <VisualsTab settings={settings} onSettingChange={onSettingChange} />;
+      case 'weapons':
+        return <WeaponsTab settings={settings} onSettingChange={onSettingChange} />;
       case 'misc':
         return <MiscTab settings={settings} onSettingChange={onSettingChange} />;
       case 'help':
         return <HelpTab settings={settings} onSettingChange={onSettingChange} />;
       default:
-        return <HelpTab settings={settings} onSettingChange={onSettingChange} />;
+        return <MainTab settings={settings} onSettingChange={onSettingChange} />;
     }
   };
 

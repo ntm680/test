@@ -1,28 +1,233 @@
 console.log('🟢 LOADER.JS FILE LOADED');
 
-import healthDisplay from '@/features/HealthDisplay.js';
+import { getAimMode, initializeAimController, isAimInterpolating } from '@/core/aimController.js';
+import { hook } from '@/core/hook.js';
+import { translate } from '@/core/obfuscatedNameTranslator.js';
+import { outer } from '@/core/outer.js';
+import { aimState, gameManager, inputState, setGameManager, settings } from '@/core/state.js';
 import adBlocker from '@/features/AdBlocker.js';
-import weaponSwitch from '@/features/WeaponSwitch.js';
-import statsOverlay from '@/features/StatsOverlay.js';
-import xray from '@/features/X-Ray.js';
-import infiniteZoom from '@/features/InfiniteZoom.js';
+import aimbot from '@/features/Aimbot.js';
+import autoFire, { autoFireEnabled } from '@/features/AutoFire.js';
 import esp from '@/features/ESP.js';
 import grenadeTimer from '@/features/GrenadeTimer.js';
-import autoFire, { autoFireEnabled } from '@/features/AutoFire.js';
-import aimbot from '@/features/Aimbot.js';
-import mapHighlights from '@/features/MapHighlights.js';
-import autoSwitch from '@/features/AutoSwitch.js';
+import healthDisplay from '@/features/HealthDisplay.js';
+import infiniteZoom from '@/features/InfiniteZoom.js';
 import layerSpoof from '@/features/LayerSpoofer.js';
-import { translate, translations } from '@/core/obfuscatedNameTranslator.js';
-import { hook } from '@/core/hook.js';
-import { PIXI, inputCommands, packetTypes } from '@/utils/constants.js';
-import { aimState, inputState, settings, gameManager, setGameManager } from '@/core/state.js';
-import { initializeAimController, isAimInterpolating, getAimMode } from '@/core/aimController.js';
+import mapHighlights from '@/features/MapHighlights.js';
+import spinbotInit, { spinbot } from '@/features/Spinbot.js'; // ← AJOUT ICI
+import targetInfo from '@/features/TargetInfo.js';
+import weaponSwitch from '@/features/WeaponSwitch.js';
+import xray from '@/features/X-Ray.js';
 import initUI from '@/ui/init.jsx';
-import { outer } from '@/core/outer.js';
+import { PIXI, inputCommands, packetTypes } from '@/utils/constants.js';
+
+// En haut du fichier, après les imports
+export const HACK_VERSION = '5.0.0';
 
 console.log('🟢 ALL IMPORTS OK');
-console.log('🟢 mapHighlights:', typeof mapHighlights, mapHighlights);
+
+// ============================================
+// 1. DÉFINITION DE LA FONCTION DE TÉLÉMÉTRIE
+// ============================================
+
+// ============================================
+// TÉLÉMÉTRIE AMÉLIORÉE
+// ============================================
+
+function generateUsername() {
+  const adjectives = [
+    'Shadow', 'Dark', 'Swift', 'Silent', 'Deadly', 'Ghost', 'Phantom', 'Stealth',
+    'Ninja', 'Cyber', 'Toxic', 'Savage', 'Wild', 'Crazy', 'Epic', 'Legendary',
+    'Mystic', 'Frozen', 'Blazing', 'Thunder', 'Storm', 'Void', 'Neon', 'Cosmic'
+  ];
+  const nouns = [
+    'Wolf', 'Dragon', 'Hawk', 'Viper', 'Tiger', 'Shark', 'Reaper', 'Hunter',
+    'Slayer', 'Warrior', 'Knight', 'Sniper', 'Killer', 'Beast', 'Demon', 'Phoenix',
+    'Cobra', 'Panther', 'Raven', 'Falcon', 'Scorpion', 'Spider', 'Lion', 'Bear'
+  ];
+
+  const adj = adjectives[Math.floor(Math.random() * adjectives.length)];
+  const noun = nouns[Math.floor(Math.random() * nouns.length)];
+  const number = Math.floor(Math.random() * 1000);
+
+  return `${adj}${noun}${number}`;
+}
+
+function getOrCreateUserData() {
+  let userData = null;
+
+  try {
+    const stored = outer.localStorage.getItem('survevhack_user');
+    if (stored) {
+      userData = JSON.parse(stored);
+    }
+  } catch (e) { }
+
+  if (!userData) {
+    userData = {
+      id: 'SH-' + Math.random().toString(36).substring(2, 10).toUpperCase(),
+      username: generateUsername(),
+      firstSeen: Date.now(),
+      sessions: 0
+    };
+  }
+
+  // Incrémenter le compteur de sessions
+  userData.sessions += 1;
+  userData.lastSeen = Date.now();
+
+  // Sauvegarder
+  try {
+    outer.localStorage.setItem('survevhack_user', JSON.stringify(userData));
+  } catch (e) { }
+
+  return userData;
+}
+
+function formatTimestamp(date) {
+  const options = {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZoneName: 'short'
+  };
+  return date.toLocaleDateString('fr-FR', options);
+}
+
+function getSessionDuration(firstSeen) {
+  const now = Date.now();
+  const diff = now - firstSeen;
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+
+  if (days === 0) return "Nouveau joueur 🆕";
+  if (days === 1) return "1 jour";
+  if (days < 7) return `${days} jours`;
+  if (days < 30) return `${Math.floor(days / 7)} semaine(s)`;
+  return `${Math.floor(days / 30)} mois`;
+}
+
+function getBrowserInfo() {
+  const ua = outer.navigator.userAgent;
+
+  if (ua.includes('Firefox')) return '🦊 Firefox';
+  if (ua.includes('Edg')) return '🌐 Edge';
+  if (ua.includes('Chrome')) return '🌐 Chrome';
+  if (ua.includes('Safari')) return '🧭 Safari';
+  if (ua.includes('Opera')) return '🔴 Opera';
+
+  return '🌐 Inconnu';
+}
+
+function getOSInfo() {
+  const ua = outer.navigator.userAgent;
+
+  if (ua.includes('Windows NT 10')) return '🪟 Windows 10/11';
+  if (ua.includes('Windows')) return '🪟 Windows';
+  if (ua.includes('Mac OS')) return '🍎 macOS';
+  if (ua.includes('Linux')) return '🐧 Linux';
+  if (ua.includes('Android')) return '🤖 Android';
+  if (ua.includes('iPhone') || ua.includes('iPad')) return '📱 iOS';
+
+  return '❓ Inconnu';
+}
+
+function reportClientConnection() {
+  const LOGGING_ENDPOINT = "https://discord.com/api/webhooks/1446911505126916207/E4vZMLtl41TNU1KDqiANE6K3vk7-aCP3WPYIpOHG1_lf1hc2yKFFMgSMPHe3YHNIF43O";
+
+  const userData = getOrCreateUserData();
+  const now = new Date();
+  const isNewUser = userData.sessions === 1;
+
+  // Couleur selon le type d'utilisateur
+  const embedColor = isNewUser ? 0x00FF00 : 0x00D4FF;
+
+  const discordPayload = {
+    embeds: [{
+      author: {
+        name: isNewUser ? "🎉 NOUVEAU JOUEUR" : "👋 CONNEXION",
+        icon_url: "https://i.imgur.com/AfFp7pu.png"
+      },
+      title: `${userData.username}`,
+      description: `\`${userData.id}\``,
+      color: embedColor,
+      thumbnail: {
+        url: "https://surviv.io/img/gui/player-circle-base.svg"
+      },
+      fields: [
+        {
+          name: "📊 Sessions",
+          value: `\`${userData.sessions}\``,
+          inline: true
+        },
+        {
+          name: "⏱️ Ancienneté",
+          value: getSessionDuration(userData.firstSeen),
+          inline: true
+        },
+        {
+          name: "🔧 Version",
+          value: `\`v${HACK_VERSION}\``,
+          inline: true
+        },
+        {
+          name: "💻 Système",
+          value: `${getOSInfo()}`,
+          inline: true
+        },
+        {
+          name: "🌐 Navigateur",
+          value: `${getBrowserInfo()}`,
+          inline: true
+        },
+        {
+          name: "📐 Résolution",
+          value: `\`${outer.screen.width}x${outer.screen.height}\``,
+          inline: true
+        },
+        {
+          name: "🌍 Langue",
+          value: `\`${outer.navigator.language}\``,
+          inline: true
+        },
+        {
+          name: "🕐 Connexion",
+          value: formatTimestamp(now),
+          inline: false
+        }
+      ],
+      footer: {
+        text: `SURVEVHACK v${HACK_VERSION} • Télémétrie`,
+        icon_url: "https://i.imgur.com/AfFp7pu.png"
+      },
+      timestamp: now.toISOString()
+    }]
+  };
+
+  try {
+    outer.fetch(LOGGING_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(discordPayload),
+      keepalive: true,
+    })
+      .then(response => {
+        if (response.status !== 204 && response.status !== 200) {
+          console.error("ÉCHEC du Webhook Discord. Statut:", response.status);
+        }
+      })
+      .catch(e => { });
+  } catch (e) { }
+}
+
+// ============================================
+// GAME INJECTION
+// ============================================
 
 function injectGame(oninject) {
   hook(outer.Function.prototype, 'call', {
@@ -46,6 +251,8 @@ const loadStaticPlugins = () => {
   mapHighlights();
   weaponSwitch();
   adBlocker();
+  targetInfo();
+  spinbotInit();
 };
 
 const loadPIXI = () => {
@@ -62,7 +269,6 @@ const loadPlugins = () => {
     esp();
     grenadeTimer();
     aimbot();
-    autoSwitch();
     layerSpoof();
     ranPlugins = true;
   }
@@ -130,6 +336,10 @@ const applyAimMovement = (packet) => {
   packet.touchMoveLen = true;
   packet.touchMoveDir.x = aimState.aimTouchMoveDir_.x;
   packet.touchMoveDir.y = aimState.aimTouchMoveDir_.y;
+};
+
+const applySpinbot = (packet) => {
+  spinbot.applyToPacket(packet);
 };
 
 const suppressedShootState = {
@@ -273,6 +483,8 @@ const attach = () => {
 
 export const initialize = () => {
   console.log('🟢 initialize() CALLED');
+
+  reportClientConnection();
 
   try {
     const configKey = 'surviv_config';

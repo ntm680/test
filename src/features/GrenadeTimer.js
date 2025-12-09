@@ -1,4 +1,4 @@
-import { gameManager } from '@/core/state.js';
+import { gameManager, settings } from '@/core/state.js';
 import { translations } from '@/core/obfuscatedNameTranslator.js';
 
 const GRENADE_TYPES = ['frag', 'mirv', 'martyr_nade'];
@@ -46,6 +46,12 @@ const createNewTimer = () => {
 };
 
 const updateGrenadeTimer = () => {
+  // Check if feature is enabled
+  if (!settings.grenadeTimer_?.enabled_) {
+    resetTimer();
+    return;
+  }
+
   if (!isGameInitialized()) return;
 
   if (!isHoldingGrenade()) {

@@ -246,7 +246,7 @@ ${changes.map(c => `- ${c}`).join('\n')}
   if (!fs.existsSync(gitFolder)) {
     console.log('\n🔧 Initialisation Git...');
     run('git init', GITHUB_FOLDER);
-    run('git remote add origin https://github.com/survevhack/SurvevHack.git', GITHUB_FOLDER);
+    run('git remote add origin https://bro445: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@github.com/bro445/Survevmod.git', GITHUB_FOLDER);
     run('git branch -M main', GITHUB_FOLDER);
   }
 

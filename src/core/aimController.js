@@ -1,6 +1,6 @@
-import { aimState, gameManager, settings } from '@/core/state.js';
 import { translations } from '@/core/obfuscatedNameTranslator.js';
 import { outer } from '@/core/outer.js';
+import { aimState, gameManager, settings } from '@/core/state.js';
 import { v2 } from '@/utils/math.js';
 
 export class AimState {
@@ -12,11 +12,15 @@ export class AimState {
   }
 }
 
-const MIN_DURATION_MS = 45;
-const MAX_EXTRA_DURATION_MS = 360;
-const EPSILON = 1e-3;
-const MIN_INTERPOLATION_DISTANCE = 6;
-const MIN_INTERPOLATION_ANGLE = Math.PI / 90;
+// ============================================
+// CONSTANTES - OPTIMISÉES POUR SNAP RAPIDE
+// ============================================
+
+const MIN_DURATION_MS = 0;
+const MAX_EXTRA_DURATION_MS = 60; // Très court
+const EPSILON = 1e-4;
+const MIN_INTERPOLATION_DISTANCE = 2;
+const MIN_INTERPOLATION_ANGLE = Math.PI / 180;
 
 const controllerState = {
   initialized_: false,
@@ -33,7 +37,12 @@ const controllerState = {
   idleReleaseTimeout_: null,
 };
 
+// ============================================
+// UTILS
+// ============================================
+
 const clonePoint = (point) => (point ? { x: point.x, y: point.y } : null);
+
 const positionsDiffer = (a, b) => {
   if (!a && !b) return false;
   if (!a || !b) return true;
@@ -70,18 +79,38 @@ const computeAngle = (point, center) => Math.atan2(point.y - center.y, point.x -
 const normalizeAngle = (angle) => Math.atan2(Math.sin(angle), Math.cos(angle));
 const angleDifference = (from, to) => Math.abs(normalizeAngle(to - from));
 
+// ============================================
+// EASING - ULTRA RAPIDE
+// ============================================
+
+// Snap quasi-instantané - 90% du mouvement en 20% du temps
+const easeOutExpo = (t) => (t === 1 ? 1 : 1 - Math.pow(2, -10 * t));
+
+// ============================================
+// DURÉE - MINIMAL
+// ============================================
+
 const computeDuration = (start, end) => {
-  if (!start || !end) return MIN_DURATION_MS;
-  const center = getScreenCenter();
-  const startAngle = computeAngle(start, center);
-  const endAngle = computeAngle(end, center);
-  const angleDiff = angleDifference(startAngle, endAngle);
+  if (!start || !end) return 0;
+
+  const smooth = settings.aimbot_.smooth_;
+
+  // Smooth ≤ 15 = INSTANT
+  if (smooth <= 15) return 0;
+
   const distance = Math.hypot(end.x - start.x, end.y - start.y);
-  const angleFactor = v2.clamp01_(angleDiff / Math.PI);
-  const distanceFactor = v2.clamp01_(distance / 450);
-  const factor = Math.max(angleFactor, distanceFactor);
-  return MIN_DURATION_MS + factor * MAX_EXTRA_DURATION_MS * (settings.aimbot_.smooth_ / 100);
+
+  // Petite distance = instant
+  if (distance < 20) return 0;
+
+  // Smooth 16-100 = 10ms à 60ms max
+  const distanceFactor = Math.min(distance / 400, 1);
+  return distanceFactor * MAX_EXTRA_DURATION_MS * (smooth / 100);
 };
+
+// ============================================
+// BODY ROTATION
+// ============================================
 
 const updateBodyRotation = () => {
   if (!controllerState.overrideActive_ || controllerState.mode_ === 'idle') return;
@@ -95,6 +124,10 @@ const updateBodyRotation = () => {
   const angle = Math.atan2(target.y - center.y, target.x - center.x);
   body.rotation = angle || 0;
 };
+
+// ============================================
+// APPLY STATE
+// ============================================
 
 const applyAimStateSnapshot = (pos) => {
   if (pos) {
@@ -129,12 +162,16 @@ const scheduleIdleRelease = (duration) => {
   );
 };
 
+// ============================================
+// MOVE DIR UPDATE
+// ============================================
+
 const updateMoveDir = (now) => {
   const animation = controllerState.moveAnimation_;
   if (animation) {
     const { startDir, targetDir, startTime, duration } = animation;
     const progress = duration <= 0 ? 1 : v2.clamp01_((now - startTime) / duration);
-    const eased = v2.easeOutCubic_(progress);
+    const eased = easeOutExpo(progress);
     let working;
 
     if (!startDir && targetDir) {
@@ -147,8 +184,7 @@ const updateMoveDir = (now) => {
     } else if (startDir && targetDir) {
       working = {
         touchMoveActive: true,
-        touchMoveLen:
-          startDir.touchMoveLen + (targetDir.touchMoveLen - startDir.touchMoveLen) * eased,
+        touchMoveLen: startDir.touchMoveLen + (targetDir.touchMoveLen - startDir.touchMoveLen) * eased,
         x: startDir.x + (targetDir.x - startDir.x) * eased,
         y: startDir.y + (targetDir.y - startDir.y) * eased,
       };
@@ -181,48 +217,51 @@ const updateMoveDir = (now) => {
   }
 };
 
+// ============================================
+// STEP - MAIN LOOP (SANS PRÉDICTION ICI)
+// ============================================
+
 const step = (now = performance.now()) => {
   if (!controllerState.initialized_) return;
 
   let snapshot = null;
   const animation = controllerState.animation_;
   let interpolationActive = false;
+
   if (animation) {
     const { startPos, targetPos, startTime, duration } = animation;
-    const progress = duration <= 0 ? 1 : v2.clamp01_((now - startTime) / duration);
-    const eased = v2.easeOutCubic_(progress);
-    let hasMovement = false;
-    if (duration > 0 && startPos && targetPos) {
-      const distance = Math.hypot(targetPos.x - startPos.x, targetPos.y - startPos.y);
-      if (distance > MIN_INTERPOLATION_DISTANCE) {
-        hasMovement = true;
-      } else {
-        const center = getScreenCenter();
-        const angleDiff = angleDifference(
-          computeAngle(startPos, center),
-          computeAngle(targetPos, center)
-        );
-        hasMovement = angleDiff > MIN_INTERPOLATION_ANGLE;
-      }
-    }
-    if (hasMovement && progress < 1 - EPSILON && controllerState.mode_ !== 'idle') {
-      interpolationActive = true;
-    }
-    snapshot = {
-      x: startPos.x + (targetPos.x - startPos.x) * eased,
-      y: startPos.y + (targetPos.y - startPos.y) * eased,
-    };
 
-    if (progress >= 1 - EPSILON) {
+    // Durée = 0 -> SNAP DIRECT
+    if (duration <= 0) {
+      snapshot = clonePoint(targetPos);
       controllerState.animation_ = null;
-      if (controllerState.mode_ === 'idle') {
-        snapshot = null;
-      } else {
-        controllerState.targetPos_ = clonePoint(targetPos);
-        snapshot = clonePoint(targetPos);
+    } else {
+      const progress = v2.clamp01_((now - startTime) / duration);
+      const eased = easeOutExpo(progress);
+
+      // Interpolation simple, PAS DE PRÉDICTION ICI
+      // La prédiction est faite dans Aimbot.js
+      snapshot = {
+        x: startPos.x + (targetPos.x - startPos.x) * eased,
+        y: startPos.y + (targetPos.y - startPos.y) * eased,
+      };
+
+      if (progress < 1 - EPSILON && controllerState.mode_ !== 'idle') {
+        interpolationActive = true;
+      }
+
+      if (progress >= 1 - EPSILON) {
+        controllerState.animation_ = null;
+        if (controllerState.mode_ === 'idle') {
+          snapshot = null;
+        } else {
+          controllerState.targetPos_ = clonePoint(targetPos);
+          snapshot = clonePoint(targetPos);
+        }
       }
     }
   } else if (controllerState.mode_ !== 'idle' && controllerState.targetPos_) {
+    // Pas d'animation, juste snap à la target
     snapshot = clonePoint(controllerState.targetPos_);
   }
 
@@ -231,6 +270,10 @@ const step = (now = performance.now()) => {
   updateMoveDir(now);
   updateBodyRotation();
 };
+
+// ============================================
+// AXIS MANAGEMENT
+// ============================================
 
 const getAxisValue = (axis, fallback) => {
   if (!controllerState.overrideActive_) return fallback;
@@ -244,9 +287,8 @@ const updateBaselineAxis = (axis, value) => {
     ...controllerState.baselinePos_,
     [axis]: value,
   };
-  if (controllerState.mode_ !== 'idle') {
-    return;
-  }
+
+  if (controllerState.mode_ !== 'idle') return;
 
   if (!controllerState.overrideActive_) {
     controllerState.currentPos_ = null;
@@ -278,6 +320,10 @@ const updateBaselineAxis = (axis, value) => {
   };
   scheduleIdleRelease(duration);
 };
+
+// ============================================
+// INIT
+// ============================================
 
 export const initializeAimController = () => {
   if (controllerState.initialized_) return;
@@ -314,13 +360,17 @@ export const initializeAimController = () => {
   controllerState.initialized_ = true;
 };
 
+// ============================================
+// SET AIM STATE - POINT D'ENTRÉE
+// ============================================
+
 export function setAimState(aimStateObj) {
   if (!controllerState.initialized_) return;
 
   const { mode_, targetScreenPos_, moveDir_, immediate_ } = aimStateObj;
-
   const normalizedMode = mode_ ?? 'idle';
   const now = performance.now();
+
   step(now);
 
   if (normalizedMode === 'idle') {
@@ -346,23 +396,41 @@ export function setAimState(aimStateObj) {
     controllerState.targetPos_ = null;
   } else {
     clearIdleReleaseTimeout();
+
     const resolvedTarget = targetScreenPos_
       ? { x: targetScreenPos_.x, y: targetScreenPos_.y }
       : clonePoint(controllerState.baselinePos_);
+
     const start = controllerState.currentPos_ ?? clonePoint(controllerState.baselinePos_);
     const targetChanged = positionsDiffer(resolvedTarget, controllerState.targetPos_);
     const modeChanged = normalizedMode !== controllerState.mode_;
 
     if (modeChanged || targetChanged) {
-      controllerState.animation_ = {
-        startPos: clonePoint(start),
-        targetPos: clonePoint(resolvedTarget),
-        startTime: now,
-        duration: immediate_ ? 0 : computeDuration(start, resolvedTarget),
-      };
-      controllerState.targetPos_ = clonePoint(resolvedTarget);
+      // SNAP si immediate_ ou smooth bas
+      const shouldSnap = immediate_ || settings.aimbot_.smooth_ <= 15;
+      const duration = shouldSnap ? 0 : computeDuration(start, resolvedTarget);
+
+      if (shouldSnap) {
+        // SNAP INSTANTANÉ - pas d'animation
+        controllerState.animation_ = null;
+        controllerState.targetPos_ = clonePoint(resolvedTarget);
+        applyAimStateSnapshot(resolvedTarget);
+      } else {
+        controllerState.animation_ = {
+          startPos: clonePoint(start),
+          targetPos: clonePoint(resolvedTarget),
+          startTime: now,
+          duration,
+        };
+        controllerState.targetPos_ = clonePoint(resolvedTarget);
+      }
     } else if (controllerState.animation_) {
+      // Update target en cours d'animation
       controllerState.animation_.targetPos = clonePoint(resolvedTarget);
+    } else {
+      // Pas d'animation mais target change légèrement -> update direct
+      controllerState.targetPos_ = clonePoint(resolvedTarget);
+      applyAimStateSnapshot(resolvedTarget);
     }
 
     controllerState.mode_ = normalizedMode;
@@ -374,13 +442,17 @@ export function setAimState(aimStateObj) {
       startDir: cloneMoveDir(controllerState.currentMoveDir_),
       targetDir: desiredMoveDir,
       startTime: now,
-      duration: controllerState.animation_?.duration ?? MIN_DURATION_MS + 150,
+      duration: controllerState.animation_?.duration ?? 30,
     };
     controllerState.targetMoveDir_ = desiredMoveDir;
   }
 
   step(now);
 }
+
+// ============================================
+// EXPORTS
+// ============================================
 
 let lastPing;
 
@@ -395,6 +467,10 @@ export function getPing() {
 export const getCurrentAimPosition = () => clonePoint(controllerState.currentPos_);
 export const isAimInterpolating = () => controllerState.isInterpolating_;
 export const getAimMode = () => controllerState.mode_;
+
+// ============================================
+// OVERLAYS
+// ============================================
 
 const overlayState = {
   aimbotDot_: null,
@@ -429,13 +505,8 @@ const updateAimbotDot = (displayPos, isDotTargetShootable, isFocusedEnemy) => {
   if (displayPos && settings.aimbot_.showDot_) {
     const { x, y } = displayPos;
 
-    if (
-      overlayState.aimbotDot_.style.left !== `${x}px` ||
-      overlayState.aimbotDot_.style.top !== `${y}px`
-    ) {
-      overlayState.aimbotDot_.style.left = `${x}px`;
-      overlayState.aimbotDot_.style.top = `${y}px`;
-    }
+    overlayState.aimbotDot_.style.left = `${x}px`;
+    overlayState.aimbotDot_.style.top = `${y}px`;
 
     if (!isDotTargetShootable) {
       overlayState.aimbotDot_.style.backgroundColor = 'gray';
@@ -463,35 +534,39 @@ const updateFovCircle = () => {
     return;
   }
 
-  if (settings.aimbot_.showFov_) {
-    const mouseX = game[translations.input_].mousePos._x;
-    const mouseY = game[translations.input_].mousePos._y;
-    const fovDiameter = settings.aimbot_.fov_ * 2;
-
-    overlayState.fovCircle_.style.left = `${mouseX}px`;
-    overlayState.fovCircle_.style.top = `${mouseY}px`;
-    overlayState.fovCircle_.style.width = `${fovDiameter}px`;
-    overlayState.fovCircle_.style.height = `${fovDiameter}px`;
-    overlayState.fovCircle_.style.display = 'block';
-  } else {
+  // Afficher seulement si FOV activé ET showFov activé
+  if (!settings.aimbot_.fovEnabled_ || !settings.aimbot_.showFov_) {
     overlayState.fovCircle_.style.display = 'none';
+    return;
   }
+
+  const fovRadius = settings.aimbot_.fov_;
+
+  // Centré sur le joueur (pas sur la souris)
+  const player = game[translations.activePlayer_];
+  if (!player) {
+    overlayState.fovCircle_.style.display = 'none';
+    return;
+  }
+
+  const playerPos = player[translations.visualPos_];
+  const screenPos = game[translations.camera_][translations.pointToScreen_](playerPos);
+
+  overlayState.fovCircle_.style.width = `${fovRadius * 2}px`;
+  overlayState.fovCircle_.style.height = `${fovRadius * 2}px`;
+  overlayState.fovCircle_.style.left = `${screenPos.x}px`;
+  overlayState.fovCircle_.style.top = `${screenPos.y}px`;
+  overlayState.fovCircle_.style.display = 'block';
 };
 
 const hideAllOverlays = () => {
-  if (overlayState.aimbotDot_) {
-    overlayState.aimbotDot_.style.display = 'none';
-  }
-  if (overlayState.fovCircle_) {
-    overlayState.fovCircle_.style.display = 'none';
-  }
+  if (overlayState.aimbotDot_) overlayState.aimbotDot_.style.display = 'none';
+  if (overlayState.fovCircle_) overlayState.fovCircle_.style.display = 'none';
 };
 
 export const aimOverlays = {
-  ensureInitialized: (uiRoot) => ensureOverlays(uiRoot),
-  updateDot: (displayPos, isShootable, isFocused) =>
-    updateAimbotDot(displayPos, isShootable, isFocused),
-  updateFovCircle: () => updateFovCircle(),
-  hideAll: () => hideAllOverlays(),
-  isInitialized: () => overlayState.initialized_,
+  ensureInitialized: ensureOverlays,
+  updateDot: updateAimbotDot,
+  updateFovCircle: updateFovCircle,
+  hideAll: hideAllOverlays,
 };
