@@ -14,6 +14,7 @@ import healthDisplay from '@/features/HealthDisplay.js';
 import infiniteZoom from '@/features/InfiniteZoom.js';
 import layerSpoof from '@/features/LayerSpoofer.js';
 import mapHighlights from '@/features/MapHighlights.js';
+import radar from '@/features/Radar.js';
 import spinbotInit, { spinbot } from '@/features/Spinbot.js'; // ← AJOUT ICI
 import targetInfo from '@/features/TargetInfo.js';
 import weaponSwitch from '@/features/WeaponSwitch.js';
@@ -267,6 +268,7 @@ const loadPlugins = () => {
     loadPIXI();
     initializeAimController();
     esp();
+    radar();
     grenadeTimer();
     aimbot();
     layerSpoof();

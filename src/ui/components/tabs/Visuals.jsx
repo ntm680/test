@@ -166,6 +166,61 @@ const Visuals = ({ settings, onSettingChange }) => {
         </SubSection>
       </div>
 
+      {/* Radar */}
+      <SectionTitle
+        icon={Icons.Radar_}
+        label="Radar"
+        enabled={settings.radar_.enabled_}
+        onEnabledChange={(v) => onSettingChange((s) => (s.radar_.enabled_ = v))}
+      />
+      <div className={`group ${!settings.radar_.enabled_ ? 'hidden' : ''}`}>
+        <Slider
+          id="radar-size"
+          label="Size"
+          value={settings.radar_.size_}
+          onChange={(v) => onSettingChange((s) => (s.radar_.size_ = v))}
+          min={100}
+          max={300}
+          suffix="px"
+        />
+        <Slider
+          id="radar-range"
+          label="Range"
+          value={settings.radar_.range_}
+          onChange={(v) => onSettingChange((s) => (s.radar_.range_ = v))}
+          min={20}
+          max={100}
+          suffix="m"
+        />
+        <Slider
+          id="radar-opacity"
+          label="Opacity"
+          value={settings.radar_.opacity_}
+          onChange={(v) => onSettingChange((s) => (s.radar_.opacity_ = v))}
+          suffix="%"
+        />
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.2rem', marginTop: '0.3rem' }}>
+          <MiniCheck
+            id="radar-show-grid"
+            label="Grid"
+            checked={settings.radar_.showGrid_}
+            onChange={(v) => onSettingChange((s) => (s.radar_.showGrid_ = v))}
+          />
+          <MiniCheck
+            id="radar-show-range"
+            label="Range"
+            checked={settings.radar_.showRange_}
+            onChange={(v) => onSettingChange((s) => (s.radar_.showRange_ = v))}
+          />
+          <MiniCheck
+            id="radar-show-all-layers"
+            label="All Layers"
+            checked={settings.radar_.showAllLayers_}
+            onChange={(v) => onSettingChange((s) => (s.radar_.showAllLayers_ = v))}
+          />
+        </div>
+      </div>
+
       {/* Infinite Zoom */}
       <SectionTitle
         icon={Icons.InfiniteZoom_}
