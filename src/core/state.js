@@ -72,6 +72,15 @@ export const defaultSettings = {
       trajectory_: true,
     },
   },
+  radar_: {
+    enabled_: false,
+    size_: 150,
+    range_: 50,
+    opacity_: 80,
+    showGrid_: true,
+    showRange_: true,
+    showAllLayers_: false,
+  },
   autoLoot_: {
     enabled_: true,
   },
@@ -204,6 +213,16 @@ const settingsKeys = {
       explosions_: 'ex',
       trajectory_: 't',
     },
+  },
+  radar_: {
+    _k: 'rd',
+    enabled_: 'e',
+    size_: 's',
+    range_: 'r',
+    opacity_: 'o',
+    showGrid_: 'sg',
+    showRange_: 'sr',
+    showAllLayers_: 'al',
   },
   mapHighlights_: {
     _k: 'mh',
